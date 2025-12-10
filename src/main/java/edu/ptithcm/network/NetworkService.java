@@ -161,7 +161,9 @@ public class NetworkService {
         try{
             IO.println("Send discovery multicast");
             Peer myPeer = Cache.getInstance().getMyPeer();
-            String payload = JsonUtils.toJson(myPeer);
+            if(myPeer == null)
+                return;
+            String payload = JsonUtils.toJson(new DiscoveryPayload(myPeer));
             NetworkPacket networkPacket = new NetworkPacket(NetworkPacket.PacketType.DISCOVER, payload);
             this.discoveryService.sendMulticast(networkPacket.toBytes());
         }catch (Exception e){
