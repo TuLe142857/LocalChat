@@ -160,7 +160,12 @@ public class NetworkService {
         // send reply discovery
         try{
             Peer myPeer = Cache.getInstance().getMyPeer();
-            String payload = JsonUtils.toJson(myPeer);
+            if(myPeer == null)
+                return;
+
+            DiscoveryPayload discoveryPayloadReply = new DiscoveryPayload(myPeer);
+            discoveryPayload.sign(Cache.getInstance().getCredential().getPrivateKey());
+            String payload = JsonUtils.toJson(discoveryPayloadReply);
             NetworkPacket replyDiscovery = new NetworkPacket(NetworkPacket.PacketType.DISCOVER, payload);
             this.discoveryService.sendUnicast(replyDiscovery.toBytes(), discoveryPayload.getPeer().getIp(), discoveryPayload.getPeer().getPort());
             IO.println("Send reply discover ok");
