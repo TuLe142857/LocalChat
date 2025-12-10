@@ -1,15 +1,37 @@
 package edu.ptithcm.network;
 
 import module java.base;
-import edu.ptithcm.model.NetworkPacket;
-import edu.ptithcm.network.listener.TcpListener;
-import edu.ptithcm.network.listener.UdpListener;
+import edu.ptithcm.cache.Cache;
+import edu.ptithcm.model.Credential;
+import edu.ptithcm.model.Peer;
+import edu.ptithcm.network.core.ConnectionPool;
+import edu.ptithcm.network.packet.DiscoveryPayload;
+import edu.ptithcm.network.packet.HandshakePayload;
+import edu.ptithcm.network.service.DiscoveryService;
+import edu.ptithcm.network.service.HandshakeService;
+import edu.ptithcm.network.packet.NetworkPacket;
+import edu.ptithcm.security.CryptoUtils;
+import edu.ptithcm.service.AuthService;
 import edu.ptithcm.util.JsonUtils;
 
 public class NetworkService {
-    private ExecutorService executor;
-    private UdpListener udpListener;
-    private TcpListener tcpListener;
+
+    //udp
+    private static final int discoveryUnicastPort = 9999;
+    private static final int discoveryMulticastPort = 9998;
+    private static final InetAddress discoveryMulticastGroup;
+
+    static {
+        try {
+            discoveryMulticastGroup = InetAddress.getByName("230.0.0.1");
+        } catch (UnknownHostException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private ScheduledExecutorService scheduledExecutorService;
+    private HandshakeService handshakeService;
+    private DiscoveryService discoveryService;
     private final InetAddress bindAddress;
     private final int tcpPort;
 
@@ -19,80 +41,144 @@ public class NetworkService {
     }
 
     public void start(){
-        tcpListener = new TcpListener(bindAddress, tcpPort, this::handleTcpClient);
-        udpListener = new UdpListener(bindAddress, 9999, this::handleUdpClient);
+        handshakeService = new HandshakeService(bindAddress, tcpPort, this::handleHandshakeClient);
+        discoveryService = new DiscoveryService(
+                discoveryUnicastPort,
+                discoveryMulticastPort,
+                discoveryMulticastGroup,
+                bindAddress,
+                this::handleDiscoveryUnicast,
+                this::handleDiscoveryMulticast
+        );
 
-        // init thread pool
-        executor = Executors.newVirtualThreadPerTaskExecutor();
+        scheduledExecutorService = Executors.newScheduledThreadPool(
+                1,
+                r -> {
+                    Thread t = new Thread(r);
+                    t.setDaemon(true);
+                    return t;
+                    }
+        );
+        scheduledExecutorService.scheduleWithFixedDelay(this::sendDiscoverMulticast, 3, 5, TimeUnit.SECONDS);
 
-        //start thread
-        executor.execute(()->tcpListener.start());
-        executor.execute(()->udpListener.start());
+        //start service
+        handshakeService.start();
+        discoveryService.start();
     }
 
     public void stop(){
         IO.println("Network service stop");
-        udpListener.stop();
-        tcpListener.stop();
-        executor.close();
+        scheduledExecutorService.shutdownNow();
+        handshakeService.stop();
+        discoveryService.stop();
     }
 
-    private void handleTcpClient(Socket client){
+    private void handleHandshakeClient(Socket client){
         try{
-            DataInputStream in = new DataInputStream(client.getInputStream());
-            int length = in.readInt();
+            DataInputStream dataInputStream = new DataInputStream(client.getInputStream());
+            int length = dataInputStream.readInt();
             byte[] buf = new byte[length];
-            in.readFully(buf);
-            String json = new String(buf, StandardCharsets.UTF_8);
-            NetworkPacket packet = NetworkPacket.fromBytes(buf, 0, buf.length);
+            dataInputStream.readFully(buf);
+            NetworkPacket networkPacket = NetworkPacket.fromBytes(buf, 0, buf.length);
 
-            IO.println("TCP From " + client.getRemoteSocketAddress());
-            IO.println(json);
-            IO.println(JsonUtils.toJson(packet));
-            IO.println();
+            if(networkPacket.getPacketType() != NetworkPacket.PacketType.HANDSHAKE){
+                client.close();
+                return;
+            }
+
+            HandshakePayload handshakePayload = networkPacket.getPayloadAs(HandshakePayload.class);
+            Peer senderPeer = Cache.getInstance().getPeer(handshakePayload.getSenderId());
+            boolean check = (senderPeer != null)
+                    && (System.currentTimeMillis() - handshakePayload.getTimestamp() < 5000)
+                    && (handshakePayload.verify(senderPeer.getPublicKey()));
+            if (!check){
+                client.close();
+                return;
+            }
+
+
+            String encryptedSessionKeyStr = handshakePayload.getEncryptedSessionKey();
+            String plainSessionKeyStr = CryptoUtils.decryptRSA(encryptedSessionKeyStr, Cache.getInstance().getCredential().getPrivateKey());
+            if(plainSessionKeyStr == null){
+                client.close();
+                return;
+            }
+            SecretKey sessionKey = CryptoUtils.stringToSecretKey(plainSessionKeyStr);
+
+            // logic xử lý concurrency khi 2 peer cùng yêu cầu handshake cùng lúc sử lý ở ConnectionPool.addConnection
+            boolean addSuccess = ConnectionPool.getInstance().addConnection(senderPeer, client, sessionKey);
+            if(!addSuccess){
+                client.close();
+                return;
+            }
+
+
         } catch (Exception e) {
+
 //            throw new RuntimeException(e);
         }
 
     }
 
-    private void handleUdpClient(DatagramPacket ppacket){
-//        byte [] buf = ppacket.getData();
-//        String json = new String(buf, 0, ppacket.getLength(), StandardCharsets.UTF_8);
-//        NetworkPacket packet = JsonUtils.fromJson(json, NetworkPacket.class);
-
-        NetworkPacket packet = NetworkPacket.fromDatagramPacket(ppacket);
-        IO.println("UCP From " + ppacket.getSocketAddress());
-        IO.println(JsonUtils.toJson(packet));
-        IO.println(JsonUtils.toJson(packet));
-        IO.println();
+    private void handleDiscoveryUnicast(DatagramPacket packet){
+        IO.println("Get udp unicast discover from " + packet.getSocketAddress());
+        NetworkPacket networkPacket = NetworkPacket.fromDatagramPacket(packet);
+        if(networkPacket.getPacketType() != NetworkPacket.PacketType.DISCOVER)
+            return;
+        DiscoveryPayload discoveryPayload = networkPacket.getPayloadAs(DiscoveryPayload.class);
+        boolean check = discoveryPayload.verify(discoveryPayload.getPeer().getPublicKey())
+                && (System.currentTimeMillis() - discoveryPayload.getTimestamp() < 3000);
+        if (!check)
+            return;
+        Cache.getInstance().addPeer(discoveryPayload.getPeer());
     }
+
+    private void handleDiscoveryMulticast(DatagramPacket packet){
+        IO.println("Get udp multicast discover from " + packet.getSocketAddress());
+        NetworkPacket networkPacket = NetworkPacket.fromDatagramPacket(packet);
+        if(networkPacket.getPacketType() != NetworkPacket.PacketType.DISCOVER)
+            return;
+        DiscoveryPayload discoveryPayload = networkPacket.getPayloadAs(DiscoveryPayload.class);
+        boolean check = discoveryPayload.verify(discoveryPayload.getPeer().getPublicKey())
+                && (System.currentTimeMillis() - discoveryPayload.getTimestamp() < 3000);
+        if (!check)
+            return;
+
+        //fix self broadcast
+        if(discoveryPayload.getPeer().getId().compareTo(Cache.getInstance().getCredential().getId()) != 0)
+            Cache.getInstance().addPeer(discoveryPayload.getPeer());
+
+        // send reply discovery
+        try{
+            Peer myPeer = Cache.getInstance().getMyPeer();
+            String payload = JsonUtils.toJson(myPeer);
+            NetworkPacket replyDiscovery = new NetworkPacket(NetworkPacket.PacketType.DISCOVER, payload);
+            this.discoveryService.sendUnicast(replyDiscovery.toBytes(), discoveryPayload.getPeer().getIp(), discoveryPayload.getPeer().getPort());
+        }catch (IOException e){}
+    }
+
+    private void sendDiscoverMulticast(){
+        try{
+            IO.println("Send discovery multicast");
+            Peer myPeer = Cache.getInstance().getMyPeer();
+            String payload = JsonUtils.toJson(myPeer);
+            NetworkPacket networkPacket = new NetworkPacket(NetworkPacket.PacketType.DISCOVER, payload);
+            this.discoveryService.sendMulticast(networkPacket.toBytes());
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+    }
+
 
     static void main() throws UnknownHostException {
+        AuthService.login(
+                new Credential(CryptoUtils.generateRSAKeyPair(), "Tú(window)"),
+                InetAddress.getByName("192.168.65.1"),
+                9999);
         NetworkService networkService = new NetworkService(InetAddress.getByName("192.168.65.1"), 9999);
         networkService.start();
-        ScheduledExecutorService exe = Executors.newScheduledThreadPool(2);
-        exe.scheduleWithFixedDelay(()->{
-            try(Socket socket = new Socket(InetAddress.getByName("192.168.65.1"), 9999);){
-//                IO.println("send");
-                NetworkPacket networkPacket = new NetworkPacket(NetworkPacket.PacketType.DISCOVER, "id",  "discover", "sig");
-                DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
-                byte [] buf = networkPacket.toBytes();
-                dos.writeInt(buf.length);
-                dos.write(buf);
-                dos.flush();
-            }catch (Exception e){}
-        },0,3,TimeUnit.SECONDS);
 
-        exe.scheduleWithFixedDelay(()->{
-            try(DatagramSocket socket = new DatagramSocket()){
-                NetworkPacket networkPacket = new NetworkPacket(NetworkPacket.PacketType.DISCOVER, "id",  "discover", "sig");
-                byte [] buf = JsonUtils.toJson(networkPacket).getBytes(StandardCharsets.UTF_8);
-                DatagramPacket packet = new DatagramPacket(buf, buf.length, InetAddress.getByName("192.168.65.1"), 9999);
-                socket.send(packet);
-            }catch (Exception e){};
-        }, 0, 3, TimeUnit.SECONDS);
+        while(true){}
     }
-
 
 }

@@ -5,10 +5,12 @@ import edu.ptithcm.model.Credential;
 import edu.ptithcm.model.Peer;
 
 import java.net.InetAddress;
+import java.util.Iterator;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Cache {
     private static final Cache instance = new Cache();
+
     // credential & ip, port
     private Credential credential;
     private InetAddress ip;
@@ -36,6 +38,9 @@ public class Cache {
         conversations.clear();
     }
 
+    public Peer getMyPeer(){
+        return new Peer(credential, ip, port);
+    }
     public Credential getCredential() {
         return credential;
     }

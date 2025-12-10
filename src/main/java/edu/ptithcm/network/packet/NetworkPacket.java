@@ -1,4 +1,4 @@
-package edu.ptithcm.model;
+package edu.ptithcm.network.packet;
 
 import edu.ptithcm.util.JsonUtils;
 
@@ -14,7 +14,6 @@ import java.time.Instant;
 public class NetworkPacket {
     public static enum PacketType{
         DISCOVER,
-        DISCOVER_ACK,
         HANDSHAKE,
         HANDSHAKE_ACK,
         MESSAGE,
@@ -24,16 +23,12 @@ public class NetworkPacket {
         HEART_BEAT
     }
     private final PacketType packetType;
-    private final String senderId;
     private final String payload;
-    private final String signature;
-    private final long  timestamp = Instant.now().getEpochSecond();
 
-    public NetworkPacket(PacketType packetType, String senderId, String payload, String signature) {
+
+    public NetworkPacket(PacketType packetType, String payload) {
         this.packetType = packetType;
-        this.senderId = senderId;
         this.payload = payload;
-        this.signature = signature;
     }
 
     public byte[] toBytes(){
@@ -46,27 +41,18 @@ public class NetworkPacket {
     }
 
     public static NetworkPacket fromDatagramPacket(DatagramPacket datagramPacket){
-        return fromBytes(datagramPacket.getData(), 0, datagramPacket.getLength());
+        return fromBytes(datagramPacket.getData(), datagramPacket.getOffset(), datagramPacket.getLength());
     }
 
+    public <T> T getPayloadAs(Class<T> clazz){
+        return JsonUtils.fromJson(this.payload, clazz);
+    }
 
     public PacketType getPacketType() {
         return packetType;
     }
 
-    public String getSenderId() {
-        return senderId;
-    }
-
     public String getPayload() {
         return payload;
-    }
-
-    public String getSignature() {
-        return signature;
-    }
-
-    public long getTimestamp() {
-        return timestamp;
     }
 }

@@ -9,12 +9,20 @@ public class Peer {
     private final PublicKey publicKey;
     private String name;
     private InetAddress ip;
-    private String port;
+    private int port;
 
-    public Peer(String id, PublicKey publicKey, String name, InetAddress ip, String port) {
+    public Peer(String id, PublicKey publicKey, String name, InetAddress ip, int port) {
         this.id = id;
         this.publicKey = publicKey;
         this.name = name;
+        this.ip = ip;
+        this.port = port;
+    }
+
+    public Peer(Credential credential, InetAddress ip, int port){
+        this.id = credential.getId();
+        this.publicKey = credential.getPublicKey();
+        this.name = credential.getName();
         this.ip = ip;
         this.port = port;
     }
@@ -44,11 +52,11 @@ public class Peer {
         this.ip = ip;
     }
 
-    public String getPort() {
+    public int getPort() {
         return port;
     }
 
-    public void setPort(String port) {
+    public void setPort(int port) {
         this.port = port;
     }
 

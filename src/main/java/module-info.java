@@ -9,4 +9,5 @@ module LocalChat {
 //    requires com.google.gson;
     opens edu.ptithcm.model to com.google.gson;
     exports edu.ptithcm;
+    opens edu.ptithcm.network.packet to com.google.gson;
 }
