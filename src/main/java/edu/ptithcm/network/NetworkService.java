@@ -141,12 +141,21 @@ public class NetworkService {
         DiscoveryPayload discoveryPayload = networkPacket.getPayloadAs(DiscoveryPayload.class);
         boolean check = discoveryPayload.verify(discoveryPayload.getPeer().getPublicKey())
                 && (System.currentTimeMillis() - discoveryPayload.getTimestamp() < 3000);
-        if (!check)
-            return;
+        if (!check){
+            IO.println("Verify failed");
+            IO.println(discoveryPayload.verify(discoveryPayload.getPeer().getPublicKey()));
+            IO.println((System.currentTimeMillis() - discoveryPayload.getTimestamp() < 3000));
+        }
 
         //fix self broadcast
-        if(discoveryPayload.getPeer().getId().compareTo(Cache.getInstance().getCredential().getId()) != 0)
+        if(discoveryPayload.getPeer().getId().compareTo(Cache.getInstance().getCredential().getId()) != 0){
+            IO.println("try add cache");
             Cache.getInstance().addPeer(discoveryPayload.getPeer());
+        }else{
+            IO.println("ignore");
+            return;
+        }
+
 
         // send reply discovery
         try{
@@ -154,7 +163,10 @@ public class NetworkService {
             String payload = JsonUtils.toJson(myPeer);
             NetworkPacket replyDiscovery = new NetworkPacket(NetworkPacket.PacketType.DISCOVER, payload);
             this.discoveryService.sendUnicast(replyDiscovery.toBytes(), discoveryPayload.getPeer().getIp(), discoveryPayload.getPeer().getPort());
-        }catch (IOException e){}
+            IO.println("Send reply discover ok");
+        }catch (IOException e){
+            e.printStackTrace();
+        }
     }
 
     private void sendDiscoverMulticast(){
@@ -163,7 +175,9 @@ public class NetworkService {
             Peer myPeer = Cache.getInstance().getMyPeer();
             if(myPeer == null)
                 return;
-            String payload = JsonUtils.toJson(new DiscoveryPayload(myPeer));
+            DiscoveryPayload discoveryPayload = new DiscoveryPayload(myPeer);
+            discoveryPayload.sign(Cache.getInstance().getCredential().getPrivateKey());
+            String payload = JsonUtils.toJson(discoveryPayload);
             NetworkPacket networkPacket = new NetworkPacket(NetworkPacket.PacketType.DISCOVER, payload);
             this.discoveryService.sendMulticast(networkPacket.toBytes());
         }catch (Exception e){
