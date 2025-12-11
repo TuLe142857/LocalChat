@@ -22,6 +22,7 @@ public class Cli {
             "exit", Cli::exit
     );
     static NetworkService networkService;
+
     static void main() throws Exception{
         LogConfig.config(false, true);
         String name = IO.readln("Your name: ");
