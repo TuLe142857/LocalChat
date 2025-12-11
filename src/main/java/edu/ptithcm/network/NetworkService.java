@@ -5,7 +5,9 @@ import edu.ptithcm.cache.Cache;
 import edu.ptithcm.model.Credential;
 import edu.ptithcm.model.Peer;
 import edu.ptithcm.network.core.ConnectionPool;
+import edu.ptithcm.network.core.PeerConnection;
 import edu.ptithcm.network.packet.DiscoveryPayload;
+import edu.ptithcm.network.packet.HandshakeAckPayload;
 import edu.ptithcm.network.packet.HandshakePayload;
 import edu.ptithcm.network.service.DiscoveryService;
 import edu.ptithcm.network.service.HandshakeService;
@@ -73,6 +75,12 @@ public class NetworkService {
         discoveryService.stop();
     }
 
+    /**
+     * Serversocket nhận đc yêu cầu handshake từ máy khác
+     * Đọc gói tin handshake
+     * Kiểm tra
+     * @param client
+     */
     private void handleHandshakeClient(Socket client){
         try{
             DataInputStream dataInputStream = new DataInputStream(client.getInputStream());
@@ -89,6 +97,7 @@ public class NetworkService {
             HandshakePayload handshakePayload = networkPacket.getPayloadAs(HandshakePayload.class);
             Peer senderPeer = Cache.getInstance().getPeer(handshakePayload.getSenderId());
             boolean check = (senderPeer != null)
+                    && senderPeer.getId().equals(CryptoUtils.hashSHA256(CryptoUtils.publicKeyToString(senderPeer.getPublicKey())))
                     && (System.currentTimeMillis() - handshakePayload.getTimestamp() < 5000)
                     && (handshakePayload.verify(senderPeer.getPublicKey()));
             if (!check){
@@ -105,19 +114,121 @@ public class NetworkService {
             }
             SecretKey sessionKey = CryptoUtils.stringToSecretKey(plainSessionKeyStr);
 
-            // logic xử lý concurrency khi 2 peer cùng yêu cầu handshake cùng lúc sử lý ở ConnectionPool.addConnection
-            boolean addSuccess = ConnectionPool.getInstance().addConnection(senderPeer, client, sessionKey);
+            // logic xử lý concurrency khi 2 peer cùng yêu cầu handshake cùng lúc sử lý ở ConnectionPool.addIncomingConnection
+            boolean addSuccess = ConnectionPool.getInstance().addIncomingConnection(senderPeer, client, sessionKey);
+            HandshakeAckPayload handshakeAckPayload = new HandshakeAckPayload(Cache.getInstance().getCredential().getId(), addSuccess);
+            handshakeAckPayload.sign(Cache.getInstance().getCredential().getPrivateKey());
+
+            String encryptedPayload = CryptoUtils.encryptAES(JsonUtils.toJson(handshakeAckPayload), sessionKey);
+            NetworkPacket ackPacket = new NetworkPacket(NetworkPacket.PacketType.HANDSHAKE_ACK, encryptedPayload);
+
+            DataOutputStream dataOutputStream = new DataOutputStream(client.getOutputStream());
+            byte[] ackBuf =ackPacket.toBytes();
+            dataOutputStream.write(ackBuf.length);
+            dataOutputStream.write(ackBuf);
+            dataOutputStream.flush();
+
             if(!addSuccess){
                 client.close();
-                return;
             }
 
 
         } catch (Exception e) {
 
+            // :))
+//            try{client.close();}catch (Exception ee){}
 //            throw new RuntimeException(e);
         }
 
+    }
+
+    /**
+     * <pre>
+     *     Thực hiện gởi yêu cầu handshake
+     *     Tạo session key, gởi gói handshake
+     *     Nhận và check handshake ack, nếu verify ok và ack ==  accept thì trả về PeerConnection
+     *     Việc thêm vào connection pool phải do luồng gọi hàm này tự xủ lý
+     *
+     * </pre>
+     * @param targetPeer
+     * @return
+     * @throws Exception Nếu không thành công, tự động đóng socket
+     */
+    public static PeerConnection performOutgoingHandshake(Peer targetPeer) throws Exception {
+        IO.println("Start handshake with " + targetPeer.getIp());
+
+        // 1. Mở Socket (Blocking I/O nhưng chạy trên Virtual Thread nên OK)
+        Socket socket = new Socket(targetPeer.getIp(), targetPeer.getPort());
+        socket.setSoTimeout(5000); // Timeout 5s cho handshake
+
+        try {
+            // 2. Tạo Session Key (AES) cho phiên này
+            SecretKey sessionKey = CryptoUtils.generateAESKey();
+            String sessionKeyStr = CryptoUtils.secretKeyToString(sessionKey);
+
+            // 3. Mã hóa Session Key bằng Public Key của đối phương (RSA)
+            String encryptedSessionKey = CryptoUtils.encryptRSA(sessionKeyStr, targetPeer.getPublicKey());
+
+            // 4. Tạo Payload Handshake và Ký
+            HandshakePayload payload = new HandshakePayload(
+                    Cache.getInstance().getCredential().getId(), // My ID
+                    encryptedSessionKey
+            );
+            payload.sign(Cache.getInstance().getCredential().getPrivateKey());
+
+            // 5. Gửi gói tin HANDSHAKE
+            NetworkPacket packet = new NetworkPacket(NetworkPacket.PacketType.HANDSHAKE, JsonUtils.toJson(payload));
+
+            // (Gửi raw vì chưa có PeerConnection wrapper)
+            DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
+            byte[] data = packet.toBytes();
+            dos.writeInt(data.length);
+            dos.write(data);
+            dos.flush();
+
+            // 6. CHỜ PHẢN HỒI (ACK) - Rất quan trọng
+            DataInputStream dis = new DataInputStream(socket.getInputStream());
+            int len = dis.readInt();
+            byte[] buf = new byte[len];
+            dis.readFully(buf);
+
+            NetworkPacket responsePacket = NetworkPacket.fromBytes(buf, 0, len);
+
+            if (responsePacket.getPacketType() == NetworkPacket.PacketType.HANDSHAKE_ACK) {
+                // Handshake thành công!
+                // Tắt timeout để dùng cho chat lâu dài
+                String encryptedPayload = responsePacket.getPayload();
+                String plainPayload = CryptoUtils.decryptAES(encryptedPayload, sessionKey);
+                HandshakeAckPayload handshakeAckPayload;
+                try{
+                    handshakeAckPayload = JsonUtils.fromJson(plainPayload, HandshakeAckPayload.class);
+                    if(handshakeAckPayload == null)
+                        throw new Exception("null handshake payload");
+                }catch (Exception e){
+                    throw e;
+                }
+
+                // verify package....
+                boolean check = handshakeAckPayload.getSenderId().equals(targetPeer.getId())
+                        && handshakeAckPayload.verify(targetPeer.getPublicKey())
+                        && (System.currentTimeMillis()-handshakeAckPayload.getTimestamp() < 5000);
+                if (! check)
+                    throw  new Exception("Verify handshake ack failed");
+
+                if(handshakeAckPayload.isAccept()){
+                    return new PeerConnection(targetPeer, socket, sessionKey);
+                }else{
+                    throw new Exception("Handshake failed: get HandshakeAck.accept = false");
+                }
+
+            } else {
+                throw new Exception("Handshake failed: Invalid response type " + responsePacket.getPacketType());
+            }
+
+        } catch (Exception e) {
+            socket.close(); // Dọn dẹp nếu lỗi
+            throw e;
+        }
     }
 
     private void handleDiscoveryUnicast(DatagramPacket packet){
@@ -191,15 +302,25 @@ public class NetworkService {
     }
 
 
-    static void main() throws UnknownHostException {
-        AuthService.login(
-                new Credential(CryptoUtils.generateRSAKeyPair(), "Tú(window)"),
-                InetAddress.getByName("192.168.65.1"),
-                9999);
-        NetworkService networkService = new NetworkService(InetAddress.getByName("192.168.65.1"), 9999);
+    static void main() throws UnknownHostException, InterruptedException {
+        Credential credential = new Credential(CryptoUtils.generateRSAKeyPair(), "Tú(window)");
+        InetAddress address = InetAddress.getByName("192.168.65.1");
+        int port = 9999;
+        AuthService.login(credential, address, port);
+        IO.println("Login ok, check cache:");
+        IO.println("Credential: " + JsonUtils.toJson(Cache.getInstance().getCredential()));
+        IO.println("Address" + Cache.getInstance().getIp());
+        IO.println("Port: " + port);
+
+        IO.println("Start network service");
+        NetworkService networkService = new NetworkService(address, port);
         networkService.start();
 
-        while(true){}
+        while(true){
+            IO.println("Connection pool size : " + ConnectionPool.getInstance().getPoolEntrySet().size());
+            IO.println("Known Peer List size : " + Cache.getInstance().getPeerEntrySet().size());
+            Thread.sleep(3000);
+        }
     }
 
 }

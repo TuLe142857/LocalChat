@@ -12,8 +12,10 @@ import edu.ptithcm.util.JsonUtils;
 import javax.crypto.SecretKey;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.net.Socket;
+import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -72,9 +74,19 @@ public class PeerConnection {
 //                    MessageBus.emit(new MessageReceivedEvent());
                 }else if(networkPacket.getPacketType() == NetworkPacket.PacketType.MESSAGE_ACK){
 //                    MessageBus.emit(new MessageSendSuccessEvent());
+                }else{
+                    IO.println("Unexpected NetworkPacket type to PeerConnection " + peer.getId() +" : " + networkPacket.getPacketType());
                 }
             }
-        }catch (Exception e){
+        }
+        catch (EOFException | SocketException e){
+            if (running) {
+                IO.println("Connection closed by peer: " + peer.getName());
+                // Gọi ConnectionPool remove để dọn dẹp
+                ConnectionPool.getInstance().removeConnection(peer.getId());
+            }
+        }
+        catch (Exception e){
             if(running)
                 e.printStackTrace();
         }
