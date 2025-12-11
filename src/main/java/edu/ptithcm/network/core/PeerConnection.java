@@ -72,6 +72,8 @@ public class PeerConnection {
 //                    MessageBus.emit(new MessageReceivedEvent());
                 }else if(networkPacket.getPacketType() == NetworkPacket.PacketType.MESSAGE_ACK){
 //                    MessageBus.emit(new MessageSendSuccessEvent());
+                }else{
+                    IO.println("Unexpected NetworkPacket type to PeerConnection " + peer.getId() +" : " + networkPacket.getPacketType());
                 }
             }
         }catch (Exception e){
