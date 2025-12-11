@@ -6,6 +6,8 @@ import edu.ptithcm.model.Peer;
 
 import java.net.InetAddress;
 import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Cache {
@@ -76,7 +78,9 @@ public class Cache {
     public Peer getPeer(String id){
         return this.knownPeers.get(id);
     }
-
+    public Set<Map.Entry<String, Peer>> getPeerEntrySet(){
+        return knownPeers.entrySet();
+    }
     public Conversation getConversation(String id){
         return this.conversations.get(id);
     }

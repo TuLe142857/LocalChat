@@ -302,15 +302,25 @@ public class NetworkService {
     }
 
 
-    static void main() throws UnknownHostException {
-        AuthService.login(
-                new Credential(CryptoUtils.generateRSAKeyPair(), "Tú(window)"),
-                InetAddress.getByName("192.168.65.1"),
-                9999);
-        NetworkService networkService = new NetworkService(InetAddress.getByName("192.168.65.1"), 9999);
+    static void main() throws UnknownHostException, InterruptedException {
+        Credential credential = new Credential(CryptoUtils.generateRSAKeyPair(), "Tú(window)");
+        InetAddress address = InetAddress.getByName("192.168.65.1");
+        int port = 9999;
+        AuthService.login(credential, address, port);
+        IO.println("Login ok, check cache:");
+        IO.println("Credential: " + JsonUtils.toJson(Cache.getInstance().getCredential()));
+        IO.println("Address" + Cache.getInstance().getIp());
+        IO.println("Port: " + port);
+
+        IO.println("Start network service");
+        NetworkService networkService = new NetworkService(address, port);
         networkService.start();
 
-        while(true){}
+        while(true){
+            IO.println("Connection pool size : " + ConnectionPool.getInstance().getPoolEntrySet().size());
+            IO.println("Known Peer List size : " + Cache.getInstance().getPeerEntrySet().size());
+            Thread.sleep(3000);
+        }
     }
 
 }

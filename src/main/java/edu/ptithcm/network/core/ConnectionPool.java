@@ -8,6 +8,8 @@ import edu.ptithcm.network.NetworkService;
 import javax.crypto.SecretKey;
 import java.io.IOException;
 import java.net.Socket;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.*;
 
 public class ConnectionPool {
@@ -164,6 +166,10 @@ public class ConnectionPool {
 
         // Không đóng virtualExecutor vì sẽ gây lỗi cho hàm getOrCreate không execute đc thread
 
+    }
+
+    public Set<Map.Entry<String, PeerConnection>> getPoolEntrySet(){
+        return pool.entrySet();
     }
 
 }
