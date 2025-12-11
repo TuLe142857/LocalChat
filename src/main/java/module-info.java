@@ -6,6 +6,7 @@ module LocalChat {
     requires com.google.gson;
     requires jdk.compiler;
     requires org.tinylog.api;
+    requires LocalChat;
 //    requires org.
 
 //    requires com.google.gson;
