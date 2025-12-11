@@ -243,7 +243,20 @@ public class NetworkService {
                 && (System.currentTimeMillis() - discoveryPayload.getTimestamp() < 3000);
         if (!check)
             return;
-        Cache.getInstance().addPeer(discoveryPayload.getPeer());
+        boolean peerExisting = Cache.getInstance().getPeer(discoveryPayload.getPeer().getId()) != null;
+        if(peerExisting){
+            Peer peer = Cache.getInstance().getPeer(discoveryPayload.getPeer().getId());
+            // check info change
+            if(!peer.getIp().equals(discoveryPayload.getPeer().getIp()))
+                peer.setIp(discoveryPayload.getPeer().getIp());
+            if(peer.getPort() != discoveryPayload.getPeer().getPort())
+                peer.setPort(discoveryPayload.getPeer().getPort());
+            if(!peer.getName().equals(discoveryPayload.getPeer().getName()))
+                peer.setName(discoveryPayload.getPeer().getName());
+        }else{
+            Cache.getInstance().addPeer(discoveryPayload.getPeer());
+        }
+
     }
 
     private void handleDiscoveryMulticast(DatagramPacket packet){
@@ -262,9 +275,21 @@ public class NetworkService {
 
         //fix self broadcast
         if(discoveryPayload.getPeer().getId().compareTo(Cache.getInstance().getCredential().getId()) != 0){
-            IO.println("try add cache");
-            Cache.getInstance().addPeer(discoveryPayload.getPeer());
+            boolean peerExisting = Cache.getInstance().getPeer(discoveryPayload.getPeer().getId()) != null;
+            if(peerExisting){
+                Peer peer = Cache.getInstance().getPeer(discoveryPayload.getPeer().getId());
+                // check info change
+                if(!peer.getIp().equals(discoveryPayload.getPeer().getIp()))
+                    peer.setIp(discoveryPayload.getPeer().getIp());
+                if(peer.getPort() != discoveryPayload.getPeer().getPort())
+                    peer.setPort(discoveryPayload.getPeer().getPort());
+                if(!peer.getName().equals(discoveryPayload.getPeer().getName()))
+                    peer.setName(discoveryPayload.getPeer().getName());
+            }else{
+                Cache.getInstance().addPeer(discoveryPayload.getPeer());
+            }
         }else{
+            //self broad cast, ignore
             IO.println("ignore");
             return;
         }

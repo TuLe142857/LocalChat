@@ -46,6 +46,10 @@ public class ChatService {
 
     }
 
+    /**
+     * Bắt buộc phải tồn tại conversation, nếu không thì hàm này không tự tạo
+     * @param message
+     */
     private static void sendMessage(Message message){
         Conversation conversation = Cache.getInstance().getConversation(message.getConversationId());
         if(conversation == null)
@@ -83,13 +87,13 @@ public class ChatService {
                                         peerConnection.sendNetworkPacket(networkPacket);
 //                                        allSendFailed = false;
                                     }catch (Exception e){
-                                        MessageBus.emit(new MessageSendFailedEvent(message.getId(), message.getConversationId()));
+//                                        MessageBus.emit(new MessageSendFailedEvent(message.getId(), message.getConversationId()));
                                     }
                                 }
                         )
                         .exceptionally(
                                 t->{
-                                    MessageBus.emit(new MessageSendFailedEvent(message.getId(), message.getConversationId()));
+//                                    MessageBus.emit(new MessageSendFailedEvent(message.getId(), message.getConversationId()));
                                     return  null;
                                 }
                         );
@@ -98,12 +102,23 @@ public class ChatService {
     }
 
     private static void onReceiveMessage(Message message){
-        String conversationId = (message.getConversationId().equals(Cache.getInstance().getCredential().getId()))
-                ? (message.getSenderId())
-                : (message.getConversationId());
+        boolean isDirectChatMessage = message.getConversationId().equals(Cache.getInstance().getCredential().getId());
+        String conversationId = isDirectChatMessage
+                                ? (message.getSenderId())
+                                : (message.getConversationId());
         Conversation conversation = Cache.getInstance().getConversation(conversationId);
-        if(conversation == null)
+        if(conversation == null){
+            Peer partner = Cache.getInstance().getPeer(message.getSenderId());
+            if(partner == null)
+                return;
+
+            IO.println("Create new direct conversation");
+            DirectConversation dConversation = new DirectConversation(partner);
+            Cache.getInstance().addConversation(dConversation);
+            dConversation.onReceiveMessage(message);
             return;
+        }
+
         conversation.onReceiveMessage(message);
     }
 

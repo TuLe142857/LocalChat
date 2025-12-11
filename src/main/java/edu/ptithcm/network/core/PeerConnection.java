@@ -28,10 +28,10 @@ public class PeerConnection {
     private Peer peer;
     private final Socket socket;
     private final DataOutputStream dataOutputStream;
-    private DataInputStream dataInputStream;
+    private final DataInputStream dataInputStream;
     private final SecretKey sessionKey;
     private volatile long lastHeartbeat;
-    private ExecutorService executor;
+    private final ExecutorService executor;
 
     public PeerConnection(Peer peer, Socket socket, SecretKey sessionKey) throws IOException {
         this.peer = peer;
