@@ -78,7 +78,8 @@ public class NetworkService {
     /**
      * Serversocket nhận đc yêu cầu handshake từ máy khác
      * Đọc gói tin handshake
-     * Kiểm tra
+     * Kiểm tra chữ ký số, thử thêm vào pool
+     * Logic xử lý concurrency handshake được xử lý bên ConnectionPool, gọi hàm addIncomingConnection là được
      * @param client
      */
     private void handleHandshakeClient(Socket client){
@@ -124,7 +125,7 @@ public class NetworkService {
 
             DataOutputStream dataOutputStream = new DataOutputStream(client.getOutputStream());
             byte[] ackBuf =ackPacket.toBytes();
-            dataOutputStream.write(ackBuf.length);
+            dataOutputStream.writeInt(ackBuf.length);
             dataOutputStream.write(ackBuf);
             dataOutputStream.flush();
 
@@ -136,7 +137,7 @@ public class NetworkService {
         } catch (Exception e) {
 
             // :))
-//            try{client.close();}catch (Exception ee){}
+            try{client.close();}catch (Exception ee){}
 //            throw new RuntimeException(e);
         }
 
@@ -226,6 +227,7 @@ public class NetworkService {
             }
 
         } catch (Exception e) {
+            e.printStackTrace();
             socket.close(); // Dọn dẹp nếu lỗi
             throw e;
         }
@@ -319,6 +321,17 @@ public class NetworkService {
         while(true){
             IO.println("Connection pool size : " + ConnectionPool.getInstance().getPoolEntrySet().size());
             IO.println("Known Peer List size : " + Cache.getInstance().getPeerEntrySet().size());
+            for (var entry : Cache.getInstance().getPeerEntrySet()){
+                Peer p = entry.getValue();
+                IO.println(JsonUtils.toJson(p));
+                CompletableFuture<PeerConnection> future = ConnectionPool.getInstance().getOrConnect(p);
+                future
+                        .thenAccept(peerConnection -> IO.println("Get connection ok"))
+                        .exceptionally(t->{
+                            IO.println("connect failed");
+                            return  null;
+                        });
+            }
             Thread.sleep(3000);
         }
     }
