@@ -3,14 +3,20 @@ package edu.ptithcm.network.packet;
 import edu.ptithcm.security.Signable;
 
 public class HandshakeAckPayload implements Signable {
+    private final String senderId;
     private final boolean accept;
     private final long timestamp;
 
     private String signature;
 
-    public HandshakeAckPayload(boolean accept){
+    public HandshakeAckPayload(String senderId, boolean accept){
+        this.senderId = senderId;
         this.accept = accept;
         this.timestamp = System.currentTimeMillis();
+    }
+
+    public String getSenderId() {
+        return senderId;
     }
 
     public boolean isAccept() {
@@ -23,7 +29,7 @@ public class HandshakeAckPayload implements Signable {
 
     @Override
     public String getSignableData() {
-        return String.valueOf(accept) + timestamp;
+        return senderId+ accept + timestamp;
     }
 
     @Override

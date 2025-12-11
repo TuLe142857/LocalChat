@@ -75,6 +75,12 @@ public class NetworkService {
         discoveryService.stop();
     }
 
+    /**
+     * Serversocket nhận đc yêu cầu handshake từ máy khác
+     * Đọc gói tin handshake
+     * Kiểm tra
+     * @param client
+     */
     private void handleHandshakeClient(Socket client){
         try{
             DataInputStream dataInputStream = new DataInputStream(client.getInputStream());
@@ -91,6 +97,7 @@ public class NetworkService {
             HandshakePayload handshakePayload = networkPacket.getPayloadAs(HandshakePayload.class);
             Peer senderPeer = Cache.getInstance().getPeer(handshakePayload.getSenderId());
             boolean check = (senderPeer != null)
+                    && senderPeer.getId().equals(CryptoUtils.hashSHA256(CryptoUtils.publicKeyToString(senderPeer.getPublicKey())))
                     && (System.currentTimeMillis() - handshakePayload.getTimestamp() < 5000)
                     && (handshakePayload.verify(senderPeer.getPublicKey()));
             if (!check){
@@ -109,7 +116,7 @@ public class NetworkService {
 
             // logic xử lý concurrency khi 2 peer cùng yêu cầu handshake cùng lúc sử lý ở ConnectionPool.addIncomingConnection
             boolean addSuccess = ConnectionPool.getInstance().addIncomingConnection(senderPeer, client, sessionKey);
-            HandshakeAckPayload handshakeAckPayload = new HandshakeAckPayload(addSuccess);
+            HandshakeAckPayload handshakeAckPayload = new HandshakeAckPayload(Cache.getInstance().getCredential().getId(), addSuccess);
             handshakeAckPayload.sign(Cache.getInstance().getCredential().getPrivateKey());
 
             String encryptedPayload = CryptoUtils.encryptAES(JsonUtils.toJson(handshakeAckPayload), sessionKey);
@@ -128,14 +135,25 @@ public class NetworkService {
 
         } catch (Exception e) {
 
+            // :))
+//            try{client.close();}catch (Exception ee){}
 //            throw new RuntimeException(e);
         }
 
     }
 
-    // Trong class NetworkService hoặc HandshakeClient
-    // Hàm này block I/O nên cần đc gọi trong virtual thread
-    // throw exception if fail
+    /**
+     * <pre>
+     *     Thực hiện gởi yêu cầu handshake
+     *     Tạo session key, gởi gói handshake
+     *     Nhận và check handshake ack, nếu verify ok và ack ==  accept thì trả về PeerConnection
+     *     Việc thêm vào connection pool phải do luồng gọi hàm này tự xủ lý
+     *
+     * </pre>
+     * @param targetPeer
+     * @return
+     * @throws Exception Nếu không thành công, tự động đóng socket
+     */
     public static PeerConnection performOutgoingHandshake(Peer targetPeer) throws Exception {
         IO.println("Start handshake with " + targetPeer.getIp());
 
@@ -191,6 +209,11 @@ public class NetworkService {
                 }
 
                 // verify package....
+                boolean check = handshakeAckPayload.getSenderId().equals(targetPeer.getId())
+                        && handshakeAckPayload.verify(targetPeer.getPublicKey())
+                        && (System.currentTimeMillis()-handshakeAckPayload.getTimestamp() < 5000);
+                if (! check)
+                    throw  new Exception("Verify handshake ack failed");
 
                 if(handshakeAckPayload.isAccept()){
                     return new PeerConnection(targetPeer, socket, sessionKey);

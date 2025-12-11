@@ -113,13 +113,32 @@ public class ConnectionPool {
             }
         }
 
-        PeerConnection pc;
+        PeerConnection newIncomingConn;
         try {
-            pc = new PeerConnection(peer, socket, sessionKey);
+            newIncomingConn = new PeerConnection(peer, socket, sessionKey);
         } catch (IOException e) { return false; }
 
-        PeerConnection existing = pool.putIfAbsent(peer.getId(), pc);
-        return existing == null;
+        // putIfAbsent return null if key do not exit and add key-value
+        PeerConnection existing = pool.putIfAbsent(peer.getId(), newIncomingConn);
+        if (existing != null) {
+            // Đã có thread khác nhanh tay hơn thêm vào pool
+            newIncomingConn.close();
+            return false;
+        }
+
+        // [QUAN TRỌNG] Xử lý Pending Future (nếu có)
+        // Nếu UI đang chờ kết nối tới peer này (getOrConnect), hãy báo cho nó biết là xong rồi!
+        // Dùng chính kết nối Incoming này để complete cho cái Future đó.
+        CompletableFuture<PeerConnection> pendingFuture = pendingConnections.remove(remoteId);
+        if (pendingFuture != null) {
+            // Hủy task outgoing (nếu có thể interrupt)
+            pendingFuture.complete(newIncomingConn);
+            // Lưu ý: Thread outgoing trong performOutgoingHandshake vẫn sẽ chạy tiếp
+            // cho đến khi socket timeout hoặc connect xong, nhưng kết quả của nó sẽ bị bỏ qua
+            // vì pendingConnections đã bị remove.
+        }
+
+        return true;
     }
 
     public void removeConnection(String peerId){
