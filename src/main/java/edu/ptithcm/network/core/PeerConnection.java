@@ -74,6 +74,11 @@ public class PeerConnection {
                 }else if(networkPacket.getPacketType() == NetworkPacket.PacketType.MESSAGE){
                     Message message = networkPacket.getPayloadAs(Message.class);
                     MessageBus.emit(new MessageReceivedEvent(message));
+
+                    // gởi lại ack
+                    MessageAckPayload messageAckPayload = new MessageAckPayload(message.getId(), message.getConversationId());
+                    NetworkPacket ackPacket = new NetworkPacket(NetworkPacket.PacketType.MESSAGE_ACK, JsonUtils.toJson(messageAckPayload));
+                    this.sendNetworkPacket(ackPacket);
                 }else if(networkPacket.getPacketType() == NetworkPacket.PacketType.MESSAGE_ACK){
                     MessageAckPayload messageAckPayload = networkPacket.getPayloadAs(MessageAckPayload.class);
                     MessageBus.emit(new MessageSendSuccessEvent(messageAckPayload.getMessageId(), messageAckPayload.getConversationId()));

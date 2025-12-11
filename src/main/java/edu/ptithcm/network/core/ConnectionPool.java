@@ -74,9 +74,9 @@ public class ConnectionPool {
         return  instance;
     }
 
-    public PeerConnection getConnection(String peerId){
-        return pool.get(peerId);
-    }
+//    public PeerConnection getConnection(String peerId){
+//        return pool.get(peerId);
+//    }
 
     /**
      * Hàm quan trọng nhất: Lấy kết nối có sẵn HOẶC tự mở kết nối mới.

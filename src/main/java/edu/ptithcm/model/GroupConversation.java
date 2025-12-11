@@ -1,6 +1,7 @@
 package edu.ptithcm.model;
 
 import java.util.Iterator;
+import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public class GroupConversation extends Conversation{
@@ -14,8 +15,8 @@ public class GroupConversation extends Conversation{
         this.participants.add(peer);
     }
 
-    public Iterator<Peer> getParticipants(){
-        return participants.iterator();
+    public List<Peer> getParticipantList(){
+        return participants;
     }
 
 }
