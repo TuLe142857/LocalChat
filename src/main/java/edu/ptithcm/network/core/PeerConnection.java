@@ -10,6 +10,7 @@ import edu.ptithcm.network.packet.NetworkPacket;
 import edu.ptithcm.model.Peer;
 import edu.ptithcm.security.CryptoUtils;
 import edu.ptithcm.util.JsonUtils;
+import org.tinylog.Logger;
 
 import javax.crypto.SecretKey;
 import java.io.DataInputStream;
@@ -83,21 +84,23 @@ public class PeerConnection {
                     MessageAckPayload messageAckPayload = networkPacket.getPayloadAs(MessageAckPayload.class);
                     MessageBus.emit(new MessageSendSuccessEvent(messageAckPayload.getMessageId(), messageAckPayload.getConversationId()));
                 }else{
-                    IO.println("Unexpected NetworkPacket type to PeerConnection " + peer.getId() +" : " + networkPacket.getPacketType());
+                    Logger.info("Unexpected NetworkPacket type to PeerConnection " + peer.getId() +" : " + networkPacket.getPacketType());
                 }
             }
         }
         catch (EOFException | SocketException e){
             if (running) {
-                IO.println("Connection closed by peer: " + peer.getName());
+                Logger.info("Connection closed by peer: " + peer.getName());
                 // Gọi ConnectionPool remove để dọn dẹp
                 ConnectionPool.getInstance().removeConnection(peer.getId());
             }
         }
         catch (Exception e){
             if(running)
-                e.printStackTrace();
+//                e.printStackTrace();
+                Logger.error(e);
         }
+
     }
 
     public void close(){

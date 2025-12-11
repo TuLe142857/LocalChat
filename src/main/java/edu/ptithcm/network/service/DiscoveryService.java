@@ -2,6 +2,7 @@ package edu.ptithcm.network.service;
 
 import edu.ptithcm.network.packet.NetworkPacket;
 import edu.ptithcm.util.JsonUtils;
+import org.tinylog.Logger;
 
 import java.io.IOException;
 import java.net.*;
@@ -46,7 +47,7 @@ public class DiscoveryService {
         try {
             // 1. Unicast Socket
             unicastSocket = new DatagramSocket(new InetSocketAddress(bindIp, unicastPort));
-            IO.println("Discovery Unicast listening on " + bindIp + ":" + unicastPort);
+            Logger.info("Discovery Unicast listening on " + bindIp + ":" + unicastPort);
 
             // 2. Multicast Socket
             multicastSocket = new MulticastSocket(multicastPort);
@@ -56,9 +57,9 @@ public class DiscoveryService {
                 InetSocketAddress groupAddress = new InetSocketAddress(multicastGroup, multicastPort);
                 multicastSocket.joinGroup(groupAddress, ni);
                 multicastSocket.setNetworkInterface(ni);
-                IO.println("Discovery Multicast joined group " + multicastGroup + ":" + multicastPort + " on " + ni.getName());
+                Logger.info("Discovery Multicast joined group " + multicastGroup + ":" + multicastPort + " on " + ni.getName());
             } else {
-                IO.println("Error: Could not find network interface for " + bindIp);
+                Logger.info("Error: Could not find network interface for " + bindIp);
             }
 
             // 3. Start listening
@@ -66,7 +67,8 @@ public class DiscoveryService {
             executor.execute(this::listenMulticast);
 
         } catch (IOException e) {
-            e.printStackTrace();
+//            e.printStackTrace();
+            Logger.error(e);
             stop();
         }
     }
@@ -89,14 +91,15 @@ public class DiscoveryService {
                 }
                 multicastSocket.close();
             } catch (IOException e) {
-                e.printStackTrace();
+//                e.printStackTrace();
+                Logger.error(e);
             }
         }
 
         if (executor != null) {
             executor.close();
         }
-        IO.println("Discovery Service stopped");
+        Logger.info("Discovery Service stopped");
     }
 
     public void listenUnicast() {
@@ -110,7 +113,9 @@ public class DiscoveryService {
                 }
             } catch (IOException e) {
                 // Socket closed, exit loop
-                if (running) e.printStackTrace();
+                if (running)
+//                    e.printStackTrace();
+                    Logger.error(e);
             }
         }
     }
@@ -126,7 +131,9 @@ public class DiscoveryService {
                 }
             } catch (IOException e) {
                 // Socket closed, exit loop
-                if (running) e.printStackTrace();
+                if (running)
+//                    e.printStackTrace();
+                    Logger.error(e);
             }
         }
     }
