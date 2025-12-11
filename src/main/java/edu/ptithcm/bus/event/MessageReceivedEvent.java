@@ -1,19 +1,15 @@
 package edu.ptithcm.bus.event;
 
+import edu.ptithcm.model.Message;
+
 public class MessageReceivedEvent {
-    private final String messageId;
-    private final String conversationId;
+    private final Message message;
 
-    public MessageReceivedEvent(String messageId, String conversationId) {
-        this.messageId = messageId;
-        this.conversationId = conversationId;
+    public MessageReceivedEvent(Message message) {
+        this.message = message;
     }
 
-    public String getMessageId() {
-        return messageId;
-    }
-
-    public String getConversationId() {
-        return conversationId;
+    public Message getMessage() {
+        return message;
     }
 }

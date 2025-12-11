@@ -22,6 +22,7 @@ public class MessageBus {
 
     @SuppressWarnings("unchecked")
     public static <T> void emit(T event){
+        IO.println("New envent emitted: " + event.getClass().getName());
         var eventType = event.getClass();
         var list = listeners.get(eventType);
         if(list != null){
