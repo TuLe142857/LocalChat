@@ -7,13 +7,17 @@ import edu.ptithcm.model.Peer;
 import edu.ptithcm.view.base.BaseView;
 import javafx.application.Platform;
 import javafx.scene.control.SplitPane;
+import org.tinylog.Logger;
 
 public class ChatLayout extends BaseView {
 
     private ChatListView chatList;
     private ChatBoxView chatBox;
 
-    public ChatLayout(Object ignored) {}
+    public ChatLayout(Object ignored) {
+        // Constructor cũ không dùng, giữ lại để không phá vỡ MainLayout.java,
+        // nhưng logic sẽ dùng init() và setupUI()
+    }
 
     @Override
     protected void init() {
@@ -39,19 +43,29 @@ public class ChatLayout extends BaseView {
 
     /**
      * Khởi tạo cuộc trò chuyện trực tiếp (Được gọi từ SearchView)
+     * Đảm bảo rằng PeerConnection sẽ được tạo khi người dùng gửi tin nhắn đầu tiên
+     * thông qua logic connect-on-send trong ChatService.
      */
     public void startDirectChat(Peer peer) {
+        // 1. Tìm Conversation đã có
         Conversation conv = Cache.getInstance().getConversation(peer.getId());
 
         if (conv == null) {
+            // 2. Tạo Conversation mới nếu chưa có
+            Logger.info("Creating new DirectConversation for Peer: " + peer.getName());
             conv = new DirectConversation(peer);
             Cache.getInstance().addConversation(conv);
+
+            // Cần tải lại dữ liệu danh sách chat để hiển thị Conversation mới
             chatList.loadData();
         }
 
         final Conversation finalConv = conv;
         Platform.runLater(() -> {
+            // 3. Chọn Conversation vừa tạo/tìm thấy trong ChatListView
             chatList.conversationListView.getSelectionModel().select(finalConv);
+
+            // 4. Hiển thị nội dung trong ChatBox
             chatBox.setActiveConversation(finalConv);
         });
     }
@@ -61,11 +75,18 @@ public class ChatLayout extends BaseView {
         chatBox.loadData();
     }
 
-    @Override public void setupEventBus() {}
+    @Override public void setupEventBus() {
+        chatBox.setupEventBus();
+        chatList.setupEventBus();
+    }
 
     @Override public void onRemove() {
         super.onRemove();
-        chatList.onRemove();
-        chatBox.onRemove();
+        if (chatList != null) {
+            chatList.onRemove();
+        }
+        if (chatBox != null) {
+            chatBox.onRemove();
+        }
     }
 }

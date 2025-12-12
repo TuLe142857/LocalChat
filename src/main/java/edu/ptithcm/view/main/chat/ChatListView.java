@@ -1,5 +1,7 @@
 package edu.ptithcm.view.main.chat;
 
+import edu.ptithcm.bus.MessageBus;
+import edu.ptithcm.bus.event.MessageReceivedEvent;
 import edu.ptithcm.cache.Cache;
 import edu.ptithcm.model.Conversation;
 import edu.ptithcm.model.DirectConversation;
@@ -19,13 +21,16 @@ import javafx.scene.control.ListView;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
-import javafx.stage.Stage;
+import javafx.stage.Stage; // Đảm bảo import này có
+import java.util.Comparator;
+import java.util.List;
 import java.util.function.Consumer;
 
 public class ChatListView extends BaseView {
     public ListView<Conversation> conversationListView;
     private ObservableList<Conversation> conversations;
     private final Consumer<Conversation> onConversationSelected;
+    private Runnable unsubscribeRunnable;
 
     private static final String STYLE_HEADER = "-fx-background-color: #3f51b5; -fx-border-color: #ccc; -fx-border-width: 0 1 1 0; -fx-text-fill: white;";
     private static final String STYLE_BUTTON = "-fx-background-color: #FFC107; -fx-text-fill: #333; -fx-font-weight: bold; -fx-padding: 5 10 5 10; -fx-cursor: hand; -fx-background-radius: 5;";
@@ -65,9 +70,8 @@ public class ChatListView extends BaseView {
         });
 
         createGroupButton.setOnAction(e -> {
-            // [TEMPLATE LOGIC]: Giả lập mở modal/kích hoạt logic tạo Group
-            Alert alert = new Alert(Alert.AlertType.INFORMATION, "Tính năng Tạo Group đã được kích hoạt. (Cần bổ sung logic Backend)", ButtonType.OK);
-            alert.showAndWait();
+            // [FIXED] Ép kiểu Window sang Stage để tương thích với constructor của CreateGroupModal
+            new CreateGroupModal((Stage) this.getScene().getWindow(), this::handleNewGroupCreated);
         });
 
         root.setTop(header);
@@ -75,27 +79,39 @@ public class ChatListView extends BaseView {
         this.getChildren().add(root);
     }
 
-    @Override
-    public void loadData() {
-        conversations.clear();
-
-        // [FIX & MOCK DATA]: Tạo dữ liệu giả lập và thêm trực tiếp vào ObservableList
-        // để thay thế cho lời gọi Cache.getConversations() bị thiếu.
-        try {
-            Peer mockPeerAlice = new Peer("MOCK_ID_1", null, "Peer Alice (Mock)", null, 0);
-            Conversation mockDirectChat = new DirectConversation(mockPeerAlice);
-            GroupConversation mockGroupChat = new GroupConversation("Nhóm Đồ Án (Mock)");
-
-            conversations.add(mockDirectChat);
-            conversations.add(mockGroupChat);
-
-        } catch (Exception e) {
-            // Xử lý nếu việc tạo Mock Peer bị lỗi
-            System.err.println("Error creating mock data: " + e.getMessage());
-        }
+    private void handleNewGroupCreated(GroupConversation newGroup) {
+        loadData();
+        conversationListView.getSelectionModel().select(newGroup);
     }
 
-    @Override public void setupEventBus() {}
+    @Override
+    public void loadData() {
+        Platform.runLater(() -> {
+            conversations.clear();
+            List<Conversation> convList = Cache.getInstance().getConversationList();
+
+            // Sắp xếp theo Lamport Clock
+            convList.sort(Comparator.comparing(Conversation::getLamportClock).reversed());
+
+            conversations.addAll(convList);
+        });
+    }
+
+    @Override public void setupEventBus() {
+        this.unsubscribeRunnable = MessageBus.subscribe(MessageReceivedEvent.class, this::handleMessageReceived);
+    }
+
+    private void handleMessageReceived(MessageReceivedEvent event) {
+        Platform.runLater(this::loadData);
+    }
+
+    @Override
+    public void onRemove() {
+        super.onRemove();
+        if(this.unsubscribeRunnable != null) {
+            this.unsubscribeRunnable.run();
+        }
+    }
 
     private class ConversationListCell extends ListCell<Conversation> {
         @Override
@@ -110,8 +126,10 @@ public class ChatListView extends BaseView {
 
                 String type;
                 if (conv instanceof GroupConversation) {
-                    // [FIX]: Không thể gọi phương thức đếm thành viên. Dùng placeholder.
-                    type = " [GROUP - Thành viên: ??]";
+                    GroupConversation gConv = (GroupConversation) conv;
+                    // Kiểm tra nếu getParticipantList trả về null (dù không nên)
+                    int count = gConv.getParticipantList() != null ? gConv.getParticipantList().size() : 0;
+                    type = " [GROUP - Thành viên: " + count + "]";
                 } else {
                     type = " [Direct Chat]";
                 }

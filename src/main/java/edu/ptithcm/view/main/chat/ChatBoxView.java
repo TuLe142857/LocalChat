@@ -1,8 +1,15 @@
 package edu.ptithcm.view.main.chat;
 
+import edu.ptithcm.bus.MessageBus;
+import edu.ptithcm.bus.event.MessageReceivedEvent;
+import edu.ptithcm.bus.event.MessageSendSuccessEvent;
+import edu.ptithcm.bus.event.MessageSendingEvent;
 import edu.ptithcm.cache.Cache;
 import edu.ptithcm.model.Conversation;
+import edu.ptithcm.model.DirectConversation;
 import edu.ptithcm.model.GroupConversation;
+import edu.ptithcm.model.Message;
+import edu.ptithcm.model.Peer;
 import edu.ptithcm.view.base.BaseView;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -13,26 +20,38 @@ import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
+import org.tinylog.Logger;
+
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 public class ChatBoxView extends BaseView {
 
     private Conversation activeConversation;
-    // Khai báo mà không gán giá trị tại đây
     private Label conversationNameLabel;
     private Button addMemberButton;
     private TextArea messageArea;
     private TextField inputField;
+    private Runnable unsubscribeReceiver;
+    private Runnable unsubscribeSuccess;
+    private ScheduledExecutorService executor;
 
     private static final String STYLE_HEADER = "-fx-background-color: #e8eaf6; -fx-border-color: #ccc; -fx-border-width: 0 0 1 0;";
     private static final String STYLE_AREA = "-fx-control-inner-background:#fff; -fx-font-family: 'Segoe UI'; -fx-font-size: 14px;";
 
     @Override
     protected void init() {
-        // [FIX]: Khởi tạo tất cả các thành phần UI trong init()
         conversationNameLabel = new Label("Chọn một cuộc trò chuyện");
         addMemberButton = new Button("➕ Thêm thành viên");
         messageArea = new TextArea();
         inputField = new TextField();
+        executor = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r);
+            t.setDaemon(true);
+            return t;
+        });
     }
 
     @Override
@@ -40,7 +59,6 @@ public class ChatBoxView extends BaseView {
         BorderPane layout = new BorderPane();
 
         // --- 1. Header ---
-        // Dòng này (Line 37 trong code cũ) bây giờ an toàn vì tất cả các thành phần đã được init()
         HBox headerBox = new HBox(10, conversationNameLabel, addMemberButton);
         headerBox.setAlignment(Pos.CENTER_LEFT);
         headerBox.setPadding(new Insets(10));
@@ -81,20 +99,65 @@ public class ChatBoxView extends BaseView {
         this.getChildren().add(layout);
     }
 
-    // ... (Các hàm khác không thay đổi)
     private void handleSendMessage() {
         if (activeConversation == null) return;
         String content = inputField.getText().trim();
         if (content.isEmpty()) return;
 
-        String senderName = Cache.getInstance().getCredential().getName();
-        messageArea.appendText(senderName + ": " + content + "\n");
+        // 1. Tạo Message và thêm vào Conversation (cập nhật Lamport Clock)
+        Message message = activeConversation.createMessage(content);
+
+        // 2. Cập nhật UI ngay lập tức
         inputField.clear();
+        updateMessageArea();
+
+        // 3. Gửi sự kiện qua MessageBus
+        MessageBus.emit(new MessageSendingEvent(message));
     }
 
     private void handleAddMember() {
         if (activeConversation instanceof GroupConversation) {
-            System.out.println("Mở modal thêm thành viên cho group: " + activeConversation.getName());
+            // [TODO]: Logic mở modal thêm thành viên cho Group
+            Logger.info("Mở modal thêm thành viên cho group: " + activeConversation.getName());
+        }
+    }
+
+    private void updateMessageArea() {
+        if (activeConversation == null) return;
+
+        Platform.runLater(() -> {
+            messageArea.clear();
+            String myId = Cache.getInstance().getCredential().getId();
+
+            for (Message m : activeConversation.getMessageList()) {
+                String senderName = m.getSenderId().equals(myId)
+                        ? Cache.getInstance().getCredential().getName()
+                        : getSenderName(m.getSenderId(), activeConversation);
+
+                String statusMarker = getStatusMarker(m.getStatus());
+
+                messageArea.appendText(String.format("%s: %s %s\n", senderName, m.getContent(), statusMarker));
+            }
+        });
+    }
+
+    private String getSenderName(String senderId, Conversation conversation) {
+        if (conversation instanceof DirectConversation) {
+            return ((DirectConversation) conversation).getPartner().getName();
+        } else if (conversation instanceof GroupConversation) {
+            // [TODO]: Cần có cách tra cứu tên Peer trong Group Conversation
+            Peer peer = Cache.getInstance().getPeer(senderId);
+            return peer != null ? peer.getName() : "Peer #" + senderId.substring(0, 4);
+        }
+        return "Unknown Peer";
+    }
+
+    private String getStatusMarker(Message.MessageStatus status) {
+        switch (status) {
+            case PENDING: return "⏳";
+            case SUCCESS: return "✔️";
+            case FAILED: return "❌";
+            default: return "";
         }
     }
 
@@ -103,20 +166,68 @@ public class ChatBoxView extends BaseView {
         this.activeConversation = conversation;
         Platform.runLater(() -> {
             conversationNameLabel.setText(conversation.getName());
-
             addMemberButton.setVisible(conversation instanceof GroupConversation);
-
-            messageArea.clear();
-            messageArea.appendText("--- Đang chat với " + conversation.getName() + " ---\n\n");
-
-            messageArea.appendText("Peer giả lập: Hello, đây là tin nhắn mock.\n");
+            updateMessageArea();
         });
     }
 
     @Override
     public void loadData() {
+        // [FIX]: Set Active Conversation là null khi loadData để reset
+        setActiveConversation(null);
         messageArea.setText("Chào mừng đến với LocalChat. Vui lòng chọn một Peer hoặc Group để bắt đầu.");
     }
 
-    @Override public void setupEventBus() {}
+    @Override
+    public void setupEventBus() {
+        // Hủy đăng ký cũ nếu có
+        if(unsubscribeReceiver != null) unsubscribeReceiver.run();
+        if(unsubscribeSuccess != null) unsubscribeSuccess.run();
+
+        // Lắng nghe MessageReceivedEvent (khi có tin nhắn đến)
+        unsubscribeReceiver = MessageBus.subscribe(MessageReceivedEvent.class, this::handleMessageReceived);
+
+        // Lắng nghe MessageSendSuccessEvent (khi tin nhắn đi đã được xác nhận)
+        unsubscribeSuccess = MessageBus.subscribe(MessageSendSuccessEvent.class, this::handleMessageSuccess);
+    }
+
+    private void handleMessageReceived(MessageReceivedEvent event) {
+        // Chỉ cập nhật UI nếu tin nhắn thuộc Conversation đang mở
+        String receivedConvId = event.getMessage().getConversationId();
+
+        // Logic tìm conversation:
+        // Nếu là Direct Chat, ConversationId là Id của Peer đối tác, còn tin nhắn đến
+        // có ConversationId = Id của mình.
+        // ChatService đã xử lý việc tìm/tạo Conversation đúng.
+        // Ta chỉ cần lấy ConversationId từ ChatService.onReceiveMessage.
+
+        // Vì MessageBus đã gọi ChatService.onReceiveMessage trước, nên tin nhắn đã được thêm vào Conversation
+        // Ta chỉ cần kiểm tra xem tin nhắn có thuộc Conversation đang hiển thị không
+        if (activeConversation != null && activeConversation.getId().equals(receivedConvId)) {
+            // Cập nhật UI trên JavaFX Thread
+            Platform.runLater(this::updateMessageArea);
+        } else {
+            // Nếu là Direct Chat mới được tạo, conversationId sẽ là SenderId
+            String senderId = event.getMessage().getSenderId();
+            if(activeConversation != null && activeConversation.getId().equals(senderId)){
+                Platform.runLater(this::updateMessageArea);
+            }
+        }
+    }
+
+    private void handleMessageSuccess(MessageSendSuccessEvent event) {
+        // Chỉ cập nhật UI nếu tin nhắn thuộc Conversation đang mở
+        if (activeConversation != null && activeConversation.getId().equals(event.getConversationId())) {
+            // Dùng Platform.runLater để đảm bảo cập nhật UI Thread
+            Platform.runLater(this::updateMessageArea);
+        }
+    }
+
+    @Override
+    public void onRemove() {
+        super.onRemove();
+        if(unsubscribeReceiver != null) unsubscribeReceiver.run();
+        if(unsubscribeSuccess != null) unsubscribeSuccess.run();
+        if(executor != null) executor.shutdownNow();
+    }
 }
