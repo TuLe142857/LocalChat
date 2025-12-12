@@ -1,19 +1,23 @@
 package edu.ptithcm.bus.event;
 
+import edu.ptithcm.model.Message;
+
 public class MessageReceivedEvent {
-    private final String messageId;
-    private final String conversationId;
+    private final Message message;
 
-    public MessageReceivedEvent(String messageId, String conversationId) {
-        this.messageId = messageId;
-        this.conversationId = conversationId;
+    /**
+     * <pre>
+     *     Create MessageReceivedEvent
+     *     This constructor will call message.setStatus(Message.MessageStatus.SUCCESS);
+     * </pre>
+     * @param message message received from other peer
+     */
+    public MessageReceivedEvent(Message message) {
+        message.setStatus(Message.MessageStatus.SUCCESS);
+        this.message = message;
     }
 
-    public String getMessageId() {
-        return messageId;
-    }
-
-    public String getConversationId() {
-        return conversationId;
+    public Message getMessage() {
+        return message;
     }
 }

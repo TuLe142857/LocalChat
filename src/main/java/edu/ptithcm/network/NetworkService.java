@@ -17,6 +17,8 @@ import edu.ptithcm.service.AuthService;
 import edu.ptithcm.util.JsonUtils;
 import edu.ptithcm.bus.MessageBus;
 import edu.ptithcm.bus.event.PeerDiscoveryEvent;
+import edu.ptithcm.util.LogConfig;
+import org.tinylog.Logger;
 
 public class NetworkService {
 
@@ -267,6 +269,19 @@ public class NetworkService {
 
             // [NEW LOGIC]: Phát sự kiện sau khi Peer được thêm vào Cache
             MessageBus.emit(new PeerDiscoveryEvent(Cache.getInstance().getKnownPeersCollection()));
+            boolean peerExisting = Cache.getInstance().getPeer(discoveryPayload.getPeer().getId()) != null;
+            if(peerExisting){
+                Peer peer = Cache.getInstance().getPeer(discoveryPayload.getPeer().getId());
+                // check info change
+                if(!peer.getIp().equals(discoveryPayload.getPeer().getIp()))
+                    peer.setIp(discoveryPayload.getPeer().getIp());
+                if(peer.getPort() != discoveryPayload.getPeer().getPort())
+                    peer.setPort(discoveryPayload.getPeer().getPort());
+                if(!peer.getName().equals(discoveryPayload.getPeer().getName()))
+                    peer.setName(discoveryPayload.getPeer().getName());
+            }else{
+                Cache.getInstance().addPeer(discoveryPayload.getPeer());
+            }
         }else{
             IO.println("ignore");
             return;

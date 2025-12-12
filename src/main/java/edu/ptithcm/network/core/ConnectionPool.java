@@ -4,6 +4,8 @@ package edu.ptithcm.network.core;
 import edu.ptithcm.cache.Cache;
 import edu.ptithcm.model.Peer;
 import edu.ptithcm.network.NetworkService;
+import edu.ptithcm.network.packet.NetworkPacket;
+import org.tinylog.Logger;
 
 import javax.crypto.SecretKey;
 import java.io.IOException;
@@ -40,16 +42,42 @@ public class ConnectionPool {
 
     }
     private void scanAndRemoveConnection(){
+        long now = System.currentTimeMillis();
+        long timeout = 10000; // 10 giây không thấy heartbeat -> đóng
+        Logger.info("Check HearBeat");
+        // Duyệt qua tất cả kết nối trong pool
+        for (var entry : pool.entrySet()) {
+            String peerId = entry.getKey();
+            PeerConnection conn = entry.getValue();
 
+            // 1. Kiểm tra timeout
+            if (now - conn.getLastHeartbeat() > timeout) {
+                Logger.info("Peer " + conn.getPeer().getName() + " timed out. Closing connection.");
+                conn.close();
+                pool.remove(peerId);
+                continue;
+            }
+
+            // 2. Gửi Heartbeat (Ping)
+            try {
+                NetworkPacket heartbeatPacket = new NetworkPacket(NetworkPacket.PacketType.HEART_BEAT, "");
+                conn.sendNetworkPacket(heartbeatPacket);
+            } catch (IOException e) {
+                // Lỗi khi gửi heartbeat -> có thể socket đã hỏng
+                Logger.info("Peer " + conn.getPeer().getName() + " can not send heartbeat. Closing connection.");
+                conn.close();
+                pool.remove(peerId);
+            }
+        }
     }
 
     public static ConnectionPool getInstance(){
         return  instance;
     }
 
-    public PeerConnection getConnection(String peerId){
-        return pool.get(peerId);
-    }
+//    public PeerConnection getConnection(String peerId){
+//        return pool.get(peerId);
+//    }
 
     /**
      * Hàm quan trọng nhất: Lấy kết nối có sẵn HOẶC tự mở kết nối mới.

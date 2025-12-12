@@ -1,5 +1,7 @@
 package edu.ptithcm.network.service;
 
+import org.tinylog.Logger;
+
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -33,7 +35,7 @@ public class HandshakeService {
             return;
         running = true;
         executor = Executors.newVirtualThreadPerTaskExecutor();
-        IO.println("TCP listener start on "+bindAddress +":"+bindPort);
+        Logger.info("TCP listener start on "+bindAddress +":"+bindPort);
 
         try{
             serverSocket = new ServerSocket();
@@ -53,13 +55,14 @@ public class HandshakeService {
             }
         }catch (IOException e){
             if (running)
-                e.printStackTrace();
+//                e.printStackTrace();
+                Logger.error(e);
         }
     }
 
 
     public void stop(){
-        IO.println("TCP listener stop");
+        Logger.info("TCP listener stop");
         running = false;
         try{
             if(serverSocket != null)

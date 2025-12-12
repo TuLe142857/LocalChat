@@ -5,6 +5,9 @@ module LocalChat {
     requires java.desktop;
     requires com.google.gson;
     requires jdk.compiler;
+    requires org.tinylog.api;
+
+//    requires org.
 
 //    requires com.google.gson;
     opens edu.ptithcm.model to com.google.gson;

@@ -5,12 +5,18 @@ import edu.ptithcm.security.Signable;
 import java.util.UUID;
 
 public class Message implements Comparable<Message>, Signable {
+    public static enum MessageStatus{
+        PENDING,
+        SUCCESS,
+        FAILED
+    }
     private final String id;  //UUID
     private final String conversationId;
     private final String content;
     private final String senderId;
     private final long timestamp;
     private final long lamportClock;
+    private MessageStatus status;
 
     private String signature;
 
@@ -25,6 +31,15 @@ public class Message implements Comparable<Message>, Signable {
         this.senderId = senderId;
         this.timestamp = System.currentTimeMillis();
         this.lamportClock = lamportClock;
+        this.status = MessageStatus.PENDING;
+    }
+
+    public MessageStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(MessageStatus status) {
+        this.status = status;
     }
 
     public String getId() {

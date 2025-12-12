@@ -1,5 +1,7 @@
 package edu.ptithcm.bus;
 import module java.base;
+import org.tinylog.Logger;
+
 public class MessageBus {
     private static final Map<Class<?>, List<Consumer<?>>> listeners = new ConcurrentHashMap<>();
 
@@ -22,6 +24,7 @@ public class MessageBus {
 
     @SuppressWarnings("unchecked")
     public static <T> void emit(T event){
+        Logger.debug("New envent emitted: " + event.getClass().getName());
         var eventType = event.getClass();
         var list = listeners.get(eventType);
         if(list != null){

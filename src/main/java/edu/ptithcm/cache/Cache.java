@@ -5,9 +5,7 @@ import edu.ptithcm.model.Credential;
 import edu.ptithcm.model.Peer;
 
 import java.net.InetAddress;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Collection;
 import java.util.Collections;
@@ -88,5 +86,8 @@ public class Cache {
     }
     public Collection<Peer> getKnownPeersCollection(){
         return Collections.unmodifiableCollection(knownPeers.values());
+    }
+    public List<Conversation> getConversationList(){
+        return new ArrayList<>(this.conversations.values());
     }
 }
