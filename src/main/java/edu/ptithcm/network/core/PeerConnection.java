@@ -26,7 +26,7 @@ import java.util.concurrent.Executors;
 public class PeerConnection {
 
     private volatile boolean running;
-    private Peer peer;
+    private final Peer peer;
     private final Socket socket;
     private final DataOutputStream dataOutputStream;
     private final DataInputStream dataInputStream;
@@ -39,7 +39,7 @@ public class PeerConnection {
                 String.format(
                         "New PeerConnection created: peerId: %s localSocketIP: %s, remoteSocketIP: %s",
                         peer.getId(),
-                        socket.getLocalAddress().toString(),
+                        socket.getLocalSocketAddress().toString(),
                         socket.getRemoteSocketAddress().toString())
         );
         this.peer = peer;
@@ -73,6 +73,7 @@ public class PeerConnection {
 
     // when get a message, send to message bus
     private void listen(){
+        running = true;
         try{
             while(running){
                 int length = dataInputStream.readInt();

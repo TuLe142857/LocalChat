@@ -19,7 +19,8 @@ public class Cli {
     static Map<String, Consumer<String[]>> commandHandler = Map.of(
             "cache", Cli::showCache,
             "chat", Cli::chat,
-            "exit", Cli::exit
+            "exit", Cli::exit,
+            "help", Cli::help
     );
     static NetworkService networkService;
 
@@ -27,6 +28,7 @@ public class Cli {
         LogConfig.config(false, true);
 
         IO.println("Hello, code ui ko kịp test đỡ bằng terminal");
+        IO.println("Mới chat 1-1 thôi, chat nhóm chưa xong");
         String name = IO.readln("Your name: ");
         InetAddress ip = InetAddress.getByName(IO.readln("ip: "));
         int port = Integer.parseInt(IO.readln("Port: "));
@@ -105,24 +107,34 @@ public class Cli {
         if(conversation == null){
             conversation = new DirectConversation(partner);
             Cache.getInstance().addConversation(conversation);
+            IO.println("<Create new conversation>");
         }
         else{
             for(var m:conversation.getSuccessMessage()){
+                IO.println("<message in this conversation>");
                 if(m.getSenderId().equals(Cache.getInstance().getCredential().getId())){
                     IO.println("You: " +m.getContent());
                 }
                 else {
                     IO.println(partner.getName() + ": " + m.getContent());
                 }
+                IO.println("<--------------------->");
 
             }
         }
 
-        String content = IO.readln("Message: ");
+        String content = IO.readln(">> Message: ");
         Message message = conversation.createMessage(content);
         MessageBus.emit(new MessageSendingEvent(message));
     }
 
+    static void help(String []args){
+        IO.println("Available command:");
+        for(var entry:commandHandler.entrySet()){
+            IO.println(entry.getKey());
+        }
+        IO.println();
+    }
     static void exit(String []args){
         networkService.stop();
         System.exit(0);
