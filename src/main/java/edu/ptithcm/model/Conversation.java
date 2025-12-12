@@ -1,29 +1,35 @@
 package edu.ptithcm.model;
 
 import edu.ptithcm.cache.Cache;
+import edu.ptithcm.model.Message.MessageStatus;
+import org.tinylog.Logger;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
 public abstract class Conversation {
     protected final String id;
     protected String name;
-    protected final ConcurrentSkipListSet<Message> messages;
-    protected long lamportClock;
+    // Sử dụng CopyOnWriteArrayList để đảm bảo an toàn thread
+    protected final List<Message> messages;
+    protected long lastLamportClock; // Clock cao nhất của tin nhắn trong Conversation
 
     public Conversation(String name) {
         this.id = UUID.randomUUID().toString();
         this.name = name;
-        this.messages = new ConcurrentSkipListSet<>();
+        this.messages = new CopyOnWriteArrayList<>();
+        this.lastLamportClock = Cache.getInstance().getLamportClock();
     }
 
     public Conversation(String name, String id) {
         this.id = id;
         this.name = name;
-        this.messages = new ConcurrentSkipListSet<>();
+        this.messages = new CopyOnWriteArrayList<>();
+        this.lastLamportClock = Cache.getInstance().getLamportClock();
     }
 
     /**
@@ -32,34 +38,63 @@ public abstract class Conversation {
      * @return
      */
     public synchronized Message createMessage(String content){
-        this.lamportClock +=1;
+        // 1. Tăng Lamport Clock toàn cục và của Conversation
+        long currentClock = Cache.getInstance().incrementLamportClock();
+        this.lastLamportClock = currentClock;
+
+        // 2. Tạo Message
         Message message = new Message(
                 this.id,
                 Cache.getInstance().getCredential().getId(),
                 content,
-                this.lamportClock
+                currentClock
         );
-        message.setStatus(Message.MessageStatus.PENDING);
-        this.messages.add(message);
+        message.setStatus(MessageStatus.PENDING);
+
+        // 3. Thêm vào danh sách tin nhắn
+        addMessage(message);
+
+        Logger.debug("Created message with clock: " + currentClock);
         return message;
     }
 
     /**
-     * Tin nhắn nhận được
+     * Thêm tin nhắn đã có (dùng cho tin nhắn nhận được hoặc tin nhắn đã tồn tại)
      * @param message
      */
-    public synchronized void onReceiveMessage(Message message){
-        if(this.lamportClock < message.getLamportClock())
-            this.lamportClock = message.getLamportClock();
+    public synchronized void addMessage(Message message){
+        // Cập nhật Lamport Clock của Conversation khi có tin nhắn mới (chủ yếu cho mục đích sắp xếp)
+        if (message.getLamportClock() > this.lastLamportClock) {
+            this.lastLamportClock = message.getLamportClock();
+        }
+
         this.messages.add(message);
+
+        // Sắp xếp lại danh sách theo Lamport Clock và ID
+        this.messages.sort(Comparator.comparing(Message::getLamportClock).thenComparing(Message::getId));
     }
 
+    /**
+     * Tìm kiếm tin nhắn dựa trên Lamport Clock (dùng cho việc nhận Message ACK)
+     * @param clock Lamport Clock của tin nhắn cần tìm
+     * @return Message hoặc null
+     */
+    public Message getMessageByClock(long clock) {
+        for (Message message : messages) {
+            if (message.getLamportClock() == clock) {
+                return message;
+            }
+        }
+        return null;
+    }
+
+
     public long getLamportClock() {
-        return lamportClock;
+        return lastLamportClock;
     }
 
     public void setLamportClock(long lamportClock) {
-        this.lamportClock = lamportClock;
+        this.lastLamportClock = lamportClock;
     }
 
     public String getId() {

@@ -15,8 +15,7 @@ public class ChatLayout extends BaseView {
     private ChatBoxView chatBox;
 
     public ChatLayout(Object ignored) {
-        // Constructor cũ không dùng, giữ lại để không phá vỡ MainLayout.java,
-        // nhưng logic sẽ dùng init() và setupUI()
+        // Constructor cũ không dùng, giữ lại để không phá vỡ MainLayout.java
     }
 
     @Override
@@ -33,6 +32,7 @@ public class ChatLayout extends BaseView {
         this.getChildren().add(splitPane);
     }
 
+    // NEW METHOD
     private void handleConversationSelected(Conversation conv) {
         if(conv != null) {
             Platform.runLater(() -> {
@@ -43,11 +43,11 @@ public class ChatLayout extends BaseView {
 
     /**
      * Khởi tạo cuộc trò chuyện trực tiếp (Được gọi từ SearchView)
-     * Đảm bảo rằng PeerConnection sẽ được tạo khi người dùng gửi tin nhắn đầu tiên
-     * thông qua logic connect-on-send trong ChatService.
      */
+    // NEW METHOD
     public void startDirectChat(Peer peer) {
         // 1. Tìm Conversation đã có
+        // ID của DirectConversation là ID của Peer đối tác
         Conversation conv = Cache.getInstance().getConversation(peer.getId());
 
         if (conv == null) {
@@ -82,11 +82,7 @@ public class ChatLayout extends BaseView {
 
     @Override public void onRemove() {
         super.onRemove();
-        if (chatList != null) {
-            chatList.onRemove();
-        }
-        if (chatBox != null) {
-            chatBox.onRemove();
-        }
+        chatList.onRemove();
+        chatBox.onRemove();
     }
 }

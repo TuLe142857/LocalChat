@@ -1,11 +1,11 @@
 package edu.ptithcm.view.main.search;
 
-import edu.ptithcm.bus.MessageBus; // [FIX]: Import MessageBus
-import edu.ptithcm.bus.event.PeerDiscoveryEvent; // [FIX]: Import PeerDiscoveryEvent (Cần đảm bảo file này tồn tại)
+import edu.ptithcm.bus.MessageBus;
+import edu.ptithcm.bus.event.PeerDiscoveryEvent;
 import edu.ptithcm.cache.Cache;
 import edu.ptithcm.model.Peer;
 import edu.ptithcm.view.base.BaseView;
-import javafx.application.Platform; // [FIX]: Import Platform để cập nhật UI Thread
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
@@ -15,16 +15,18 @@ import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.VBox;
-
-import java.net.InetAddress;
-import java.util.Collection; // [FIX]: Import Collection
+import javafx.scene.layout.HBox;
+import java.util.Collection;
 import java.util.function.Consumer;
+import java.util.Comparator;
+import java.util.List;
+import org.tinylog.Logger;
 
-// [FIX]: Xóa interface ChatStarter và sử dụng Consumer<Peer> trực tiếp
+
 public class SearchView extends BaseView {
     private ListView<Peer> peerListView;
     private ObservableList<Peer> availablePeers;
-    private final Consumer<Peer> chatStarter; // Sử dụng Consumer<Peer>
+    private final Consumer<Peer> chatStarter;
     private Runnable unsubscribeRunnable;
 
     // Constructor sử dụng Consumer<Peer>
@@ -56,8 +58,9 @@ public class SearchView extends BaseView {
         this.getChildren().add(root);
     }
 
+    // [NEW CLASS]: PeerListCell đã sửa đổi
     private static class PeerListCell extends ListCell<Peer> {
-        private final Consumer<Peer> chatStarter; // Sử dụng Consumer<Peer>
+        private final Consumer<Peer> chatStarter;
         private final BorderPane pane = new BorderPane();
         private final Label nameLabel = new Label();
         private final Label ipLabel = new Label();
@@ -86,7 +89,6 @@ public class SearchView extends BaseView {
                 setGraphic(null);
                 setText(null);
             } else {
-                // Lấy ID thật sự của bản thân (hoặc null nếu chưa login)
                 String myId = Cache.getInstance().getCredential() != null
                         ? Cache.getInstance().getCredential().getId()
                         : null;
@@ -102,6 +104,7 @@ public class SearchView extends BaseView {
                 nameLabel.setText(peer.getName());
                 ipLabel.setText("IP: " + peer.getIp().getHostAddress() + ", Port: " + peer.getPort());
 
+                // NEW LOGIC: Kích hoạt chat qua callback
                 chatButton.setOnAction(e -> chatStarter.accept(peer));
                 setGraphic(pane);
                 setDisable(false);
@@ -115,39 +118,30 @@ public class SearchView extends BaseView {
         // [REAL DATA FETCH]: Lấy dữ liệu khởi tạo lần đầu từ Cache
         availablePeers.clear();
 
-        // Sử dụng getPeerEntrySet() đã có trong Cache.java và chuyển đổi sang Collection<Peer>
-        Collection<Peer> peers = Cache.getInstance().getPeerEntrySet().stream()
-                .map(java.util.Map.Entry::getValue)
-                .collect(java.util.stream.Collectors.toList());
-
-        availablePeers.addAll(peers);
+        // Sử dụng getPeerList() (NEW METHOD in Cache)
+        List<Peer> peers = Cache.getInstance().getPeerList();
 
         // Lọc Peer chính mình
         String myId = Cache.getInstance().getCredential() != null ? Cache.getInstance().getCredential().getId() : null;
-        if(myId != null) availablePeers.removeIf(peer -> peer.getId().equals(myId));
+        if(myId != null) peers.removeIf(peer -> peer.getId().equals(myId));
+
+        availablePeers.addAll(peers);
     }
 
     @Override
     public void setupEventBus() {
         // [EVENT BUS]: Đăng ký lắng nghe sự kiện PeerDiscoveryEvent
-        MessageBus.subscribe(PeerDiscoveryEvent.class, this::handlePeerDiscovery);
-        this.unsubscribeRunnable = MessageBus.subscribe(PeerDiscoveryEvent.class, this::handlePeerDiscovery);
+        // [MODIFIED]: Chỉ cần subscribe 1 lần
+        if (this.unsubscribeRunnable == null) {
+            this.unsubscribeRunnable = MessageBus.subscribe(PeerDiscoveryEvent.class, this::handlePeerDiscovery);
+        }
     }
 
-    // [EVENT LISTENER]: Xử lý sự kiện PeerDiscoveryEvent
+    // [NEW METHOD]: Xử lý sự kiện PeerDiscoveryEvent
     private void handlePeerDiscovery(PeerDiscoveryEvent event) {
         // Bắt buộc chạy trên JavaFX Application Thread để cập nhật UI
         Platform.runLater(() -> {
-            availablePeers.clear();
-
-            String myId = Cache.getInstance().getCredential() != null
-                    ? Cache.getInstance().getCredential().getId()
-                    : null;
-
-            // Lọc ra peer của mình và thêm vào danh sách hiển thị
-            event.getDiscoveredPeers().stream()
-                    .filter(peer -> myId == null || !peer.getId().equals(myId))
-                    .forEach(availablePeers::add);
+            loadData(); // Tải lại toàn bộ danh sách khi có Peer mới
         });
     }
 

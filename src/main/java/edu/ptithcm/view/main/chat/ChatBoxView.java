@@ -25,7 +25,6 @@ import org.tinylog.Logger;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
 
 public class ChatBoxView extends BaseView {
 
@@ -36,22 +35,18 @@ public class ChatBoxView extends BaseView {
     private TextField inputField;
     private Runnable unsubscribeReceiver;
     private Runnable unsubscribeSuccess;
-    private ScheduledExecutorService executor;
+    // Đã có executor trong init, không cần khai báo lại
 
     private static final String STYLE_HEADER = "-fx-background-color: #e8eaf6; -fx-border-color: #ccc; -fx-border-width: 0 0 1 0;";
     private static final String STYLE_AREA = "-fx-control-inner-background:#fff; -fx-font-family: 'Segoe UI'; -fx-font-size: 14px;";
 
     @Override
     protected void init() {
+        // [FIX]: Khởi tạo tất cả các thành phần UI trong init()
         conversationNameLabel = new Label("Chọn một cuộc trò chuyện");
         addMemberButton = new Button("➕ Thêm thành viên");
         messageArea = new TextArea();
         inputField = new TextField();
-        executor = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r);
-            t.setDaemon(true);
-            return t;
-        });
     }
 
     @Override
@@ -99,6 +94,7 @@ public class ChatBoxView extends BaseView {
         this.getChildren().add(layout);
     }
 
+    // NEW METHOD
     private void handleSendMessage() {
         if (activeConversation == null) return;
         String content = inputField.getText().trim();
@@ -115,13 +111,14 @@ public class ChatBoxView extends BaseView {
         MessageBus.emit(new MessageSendingEvent(message));
     }
 
+    // NEW METHOD
     private void handleAddMember() {
         if (activeConversation instanceof GroupConversation) {
-            // [TODO]: Logic mở modal thêm thành viên cho Group
             Logger.info("Mở modal thêm thành viên cho group: " + activeConversation.getName());
         }
     }
 
+    // NEW METHOD
     private void updateMessageArea() {
         if (activeConversation == null) return;
 
@@ -141,17 +138,19 @@ public class ChatBoxView extends BaseView {
         });
     }
 
+    // NEW METHOD
     private String getSenderName(String senderId, Conversation conversation) {
         if (conversation instanceof DirectConversation) {
+            // Trong Direct Chat, Peer đối tác là người gửi nếu senderId khác mình
             return ((DirectConversation) conversation).getPartner().getName();
         } else if (conversation instanceof GroupConversation) {
-            // [TODO]: Cần có cách tra cứu tên Peer trong Group Conversation
             Peer peer = Cache.getInstance().getPeer(senderId);
             return peer != null ? peer.getName() : "Peer #" + senderId.substring(0, 4);
         }
         return "Unknown Peer";
     }
 
+    // NEW METHOD
     private String getStatusMarker(Message.MessageStatus status) {
         switch (status) {
             case PENDING: return "⏳";
@@ -167,13 +166,12 @@ public class ChatBoxView extends BaseView {
         Platform.runLater(() -> {
             conversationNameLabel.setText(conversation.getName());
             addMemberButton.setVisible(conversation instanceof GroupConversation);
-            updateMessageArea();
+            updateMessageArea(); // Load lịch sử tin nhắn
         });
     }
 
     @Override
     public void loadData() {
-        // [FIX]: Set Active Conversation là null khi loadData để reset
         setActiveConversation(null);
         messageArea.setText("Chào mừng đến với LocalChat. Vui lòng chọn một Peer hoặc Group để bắt đầu.");
     }
@@ -191,34 +189,25 @@ public class ChatBoxView extends BaseView {
         unsubscribeSuccess = MessageBus.subscribe(MessageSendSuccessEvent.class, this::handleMessageSuccess);
     }
 
+    // NEW METHOD
     private void handleMessageReceived(MessageReceivedEvent event) {
-        // Chỉ cập nhật UI nếu tin nhắn thuộc Conversation đang mở
-        String receivedConvId = event.getMessage().getConversationId();
+        // Host 2: Tin nhắn đến đã tạo conversation mới (nếu cần) và được thêm vào messages.
+        // Cần kiểm tra xem Conversation đang hiển thị có khớp với tin nhắn đến không.
+        String senderId = event.getMessage().getSenderId();
 
-        // Logic tìm conversation:
-        // Nếu là Direct Chat, ConversationId là Id của Peer đối tác, còn tin nhắn đến
-        // có ConversationId = Id của mình.
-        // ChatService đã xử lý việc tìm/tạo Conversation đúng.
-        // Ta chỉ cần lấy ConversationId từ ChatService.onReceiveMessage.
-
-        // Vì MessageBus đã gọi ChatService.onReceiveMessage trước, nên tin nhắn đã được thêm vào Conversation
-        // Ta chỉ cần kiểm tra xem tin nhắn có thuộc Conversation đang hiển thị không
-        if (activeConversation != null && activeConversation.getId().equals(receivedConvId)) {
-            // Cập nhật UI trên JavaFX Thread
-            Platform.runLater(this::updateMessageArea);
-        } else {
-            // Nếu là Direct Chat mới được tạo, conversationId sẽ là SenderId
-            String senderId = event.getMessage().getSenderId();
-            if(activeConversation != null && activeConversation.getId().equals(senderId)){
+        if (activeConversation != null) {
+            // Đối với Direct Chat, activeConversation.getId() == Peer.getId() của đối tác
+            if (activeConversation instanceof DirectConversation && activeConversation.getId().equals(senderId)) {
                 Platform.runLater(this::updateMessageArea);
             }
+            // [TODO]: Logic cho Group Chat
         }
     }
 
+    // NEW METHOD
     private void handleMessageSuccess(MessageSendSuccessEvent event) {
         // Chỉ cập nhật UI nếu tin nhắn thuộc Conversation đang mở
         if (activeConversation != null && activeConversation.getId().equals(event.getConversationId())) {
-            // Dùng Platform.runLater để đảm bảo cập nhật UI Thread
             Platform.runLater(this::updateMessageArea);
         }
     }
@@ -228,6 +217,6 @@ public class ChatBoxView extends BaseView {
         super.onRemove();
         if(unsubscribeReceiver != null) unsubscribeReceiver.run();
         if(unsubscribeSuccess != null) unsubscribeSuccess.run();
-        if(executor != null) executor.shutdownNow();
+        // Giữ lại executor cho các class khác (nếu có)
     }
 }

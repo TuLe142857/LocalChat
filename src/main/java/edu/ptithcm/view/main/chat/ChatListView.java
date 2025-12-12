@@ -21,7 +21,7 @@ import javafx.scene.control.ListView;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
-import javafx.stage.Stage; // Đảm bảo import này có
+import javafx.stage.Stage;
 import java.util.Comparator;
 import java.util.List;
 import java.util.function.Consumer;
@@ -70,7 +70,6 @@ public class ChatListView extends BaseView {
         });
 
         createGroupButton.setOnAction(e -> {
-            // [FIXED] Ép kiểu Window sang Stage để tương thích với constructor của CreateGroupModal
             new CreateGroupModal((Stage) this.getScene().getWindow(), this::handleNewGroupCreated);
         });
 
@@ -79,6 +78,7 @@ public class ChatListView extends BaseView {
         this.getChildren().add(root);
     }
 
+    // NEW METHOD
     private void handleNewGroupCreated(GroupConversation newGroup) {
         loadData();
         conversationListView.getSelectionModel().select(newGroup);
@@ -98,10 +98,13 @@ public class ChatListView extends BaseView {
     }
 
     @Override public void setupEventBus() {
+        // Đăng ký lắng nghe tin nhắn để cập nhật danh sách
         this.unsubscribeRunnable = MessageBus.subscribe(MessageReceivedEvent.class, this::handleMessageReceived);
     }
 
+    // NEW METHOD
     private void handleMessageReceived(MessageReceivedEvent event) {
+        // Khi có tin nhắn đến, refresh data để Conversation vừa nhận có thể được đưa lên đầu hoặc tạo mới
         Platform.runLater(this::loadData);
     }
 
@@ -113,6 +116,7 @@ public class ChatListView extends BaseView {
         }
     }
 
+    // NEW CLASS
     private class ConversationListCell extends ListCell<Conversation> {
         @Override
         protected void updateItem(Conversation conv, boolean empty) {
@@ -127,7 +131,6 @@ public class ChatListView extends BaseView {
                 String type;
                 if (conv instanceof GroupConversation) {
                     GroupConversation gConv = (GroupConversation) conv;
-                    // Kiểm tra nếu getParticipantList trả về null (dù không nên)
                     int count = gConv.getParticipantList() != null ? gConv.getParticipantList().size() : 0;
                     type = " [GROUP - Thành viên: " + count + "]";
                 } else {

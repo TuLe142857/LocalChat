@@ -1,16 +1,18 @@
 package edu.ptithcm.network.packet;
 
-public class MessageAckPayload {
+public class MessagePayload {
     private String conversationId;
-    private String ackSenderId;
+    private String senderId;
+    private String content;
     private long lamportClock;
 
     // GSON required no-args constructor
-    public MessageAckPayload() {}
+    public MessagePayload() {}
 
-    public MessageAckPayload(String conversationId, String ackSenderId, long lamportClock) {
+    public MessagePayload(String conversationId, String senderId, String content, long lamportClock) {
         this.conversationId = conversationId;
-        this.ackSenderId = ackSenderId;
+        this.senderId = senderId;
+        this.content = content;
         this.lamportClock = lamportClock;
     }
 
@@ -19,8 +21,12 @@ public class MessageAckPayload {
         return conversationId;
     }
 
-    public String getAckSenderId() {
-        return ackSenderId;
+    public String getSenderId() {
+        return senderId;
+    }
+
+    public String getContent() {
+        return content;
     }
 
     public long getLamportClock() {

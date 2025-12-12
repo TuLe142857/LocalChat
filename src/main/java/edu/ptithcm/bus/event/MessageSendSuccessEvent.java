@@ -1,16 +1,17 @@
 package edu.ptithcm.bus.event;
 
 public class MessageSendSuccessEvent {
-    private final String messageId;
+    // SỬA: Thay thế messageId bằng lamportClock để đồng bộ với network ACK
+    private final long lamportClock;
     private final String conversationId;
 
-    public MessageSendSuccessEvent(String messageId, String conversationId) {
-        this.messageId = messageId;
+    public MessageSendSuccessEvent(long lamportClock, String conversationId) {
+        this.lamportClock = lamportClock;
         this.conversationId = conversationId;
     }
 
-    public String getMessageId() {
-        return messageId;
+    public long getLamportClock() {
+        return lamportClock;
     }
 
     public String getConversationId() {

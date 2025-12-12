@@ -31,7 +31,18 @@ public class Message implements Comparable<Message>, Signable {
         this.senderId = senderId;
         this.timestamp = System.currentTimeMillis();
         this.lamportClock = lamportClock;
-        this.status = MessageStatus.PENDING;
+        this.status = MessageStatus.PENDING; // Default status for outgoing messages
+    }
+
+    // NEW CONSTRUCTOR for incoming messages (to set initial status)
+    public Message(String conversationId, String senderId, String content, long lamportClock, MessageStatus status){
+        this.id = UUID.randomUUID().toString();
+        this.conversationId = conversationId;
+        this.content = content;
+        this.senderId = senderId;
+        this.timestamp = System.currentTimeMillis();
+        this.lamportClock = lamportClock;
+        this.status = status;
     }
 
     public MessageStatus getStatus() {

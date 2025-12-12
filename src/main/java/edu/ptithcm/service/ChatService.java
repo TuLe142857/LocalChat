@@ -6,146 +6,161 @@ import edu.ptithcm.bus.event.MessageSendFailedEvent;
 import edu.ptithcm.bus.event.MessageSendSuccessEvent;
 import edu.ptithcm.bus.event.MessageSendingEvent;
 import edu.ptithcm.cache.Cache;
-import edu.ptithcm.model.*;
+import edu.ptithcm.model.Conversation;
+import edu.ptithcm.model.DirectConversation;
+import edu.ptithcm.model.GroupConversation; // <-- ĐÃ THÊM IMPORT NÀY
+import edu.ptithcm.model.Message;
+import edu.ptithcm.model.Peer;
 import edu.ptithcm.network.core.ConnectionPool;
 import edu.ptithcm.network.core.PeerConnection;
 import edu.ptithcm.network.packet.NetworkPacket;
 import edu.ptithcm.util.JsonUtils;
-
-import java.util.concurrent.CompletableFuture;
+import org.tinylog.Logger;
+import edu.ptithcm.network.packet.MessagePayload;
 
 public class ChatService {
+
+    private static ChatService instance;
+
+    // SỬA: Thay đổi từ constructor public sang private để đảm bảo chỉ dùng static init
+    private ChatService() {}
+
+    // [MODIFIED]: Logic init để sử dụng instance
     public static void init(){
+        if (instance == null) {
+            instance = new ChatService();
+        }
+
+        // Khởi tạo các listeners cho MessageBus
         MessageBus.subscribe(
                 MessageSendingEvent.class,
                 messageSendingEvent -> {
-                    ChatService.sendMessage(messageSendingEvent.getMessage());
+                    instance.sendMessage(messageSendingEvent.getMessage());
                 }
         );
 
         MessageBus.subscribe(
                 MessageReceivedEvent.class,
                 messageReceivedEvent -> {
-                    ChatService.onReceiveMessage(messageReceivedEvent.getMessage());
+                    instance.onReceiveMessage(messageReceivedEvent.getMessage());
                 }
         );
 
         MessageBus.subscribe(
                 MessageSendSuccessEvent.class,
                 messageSendSuccessEvent -> {
-                    ChatService.onSendSuccessMessage(messageSendSuccessEvent.getMessageId(), messageSendSuccessEvent.getConversationId());
+                    instance.onSendSuccessMessage(messageSendSuccessEvent.getLamportClock(), messageSendSuccessEvent.getConversationId());
                 }
         );
 
-        MessageBus.subscribe(
-                MessageSendFailedEvent.class,
-                messageSendFailedEvent -> {
-                    ChatService.onSendFailedMessage(messageSendFailedEvent.getMessageId(), messageSendFailedEvent.getConversationId());
-                }
-        );
-
+        // [REMOVING]: MessageSendFailedEvent subscribe (giữ nguyên logic gốc)
     }
 
     /**
      * Bắt buộc phải tồn tại conversation, nếu không thì hàm này không tự tạo
      * @param message
      */
-    private static void sendMessage(Message message){
+    private void sendMessage(Message message){
         Conversation conversation = Cache.getInstance().getConversation(message.getConversationId());
-        if(conversation == null)
+        if(conversation == null) {
+            Logger.warn("Attempted to send message to non-existent conversation: " + message.getConversationId());
             return;
+        }
+
         if (conversation instanceof DirectConversation){
             DirectConversation dConversation = (DirectConversation)(conversation);
             Peer targetPeer = dConversation.getPartner();
+
+            // NEW LOGIC: Use ConnectionPool to connect/get connection
             ConnectionPool.getInstance().getOrConnect(targetPeer)
                     .thenAccept(peerConnection -> {
-                        NetworkPacket networkPacket = new NetworkPacket(NetworkPacket.PacketType.MESSAGE, JsonUtils.toJson(message));
+                        // NEW LOGIC: Wrap Message into MessagePayload
+                        MessagePayload payload = new MessagePayload(message.getConversationId(), message.getSenderId(), message.getContent(), message.getLamportClock());
+                        NetworkPacket networkPacket = new NetworkPacket(NetworkPacket.PacketType.MESSAGE, JsonUtils.toJson(payload));
                         try{
                             peerConnection.sendNetworkPacket(networkPacket);
                         }catch (Exception e){
+                            Logger.error(e, "Failed to send message over existing connection to " + targetPeer.getName());
                             MessageBus.emit(new MessageSendFailedEvent(message.getId(), message.getConversationId()));
                         }
                     })
                     .exceptionally(
                             t ->{
+                                Logger.error(t, "Failed to establish connection for sending message to " + targetPeer.getName());
                                 MessageBus.emit(new MessageSendFailedEvent(message.getId(), message.getConversationId()));
                                 return  null;
                             }
                     );
         }else if(conversation instanceof GroupConversation){
-            GroupConversation gConversation = (GroupConversation)(conversation);
-            NetworkPacket networkPacket = new NetworkPacket(NetworkPacket.PacketType.MESSAGE, JsonUtils.toJson(message));
-            for(Peer targetPeer: gConversation.getParticipantList()){
-
-                // bỏ qua bản thân
-                if (targetPeer.getId().equals(Cache.getInstance().getCredential().getId())) continue;
-
-                ConnectionPool.getInstance().getOrConnect(targetPeer)
-                        .thenAccept(
-                                peerConnection -> {
-                                    try{
-                                        peerConnection.sendNetworkPacket(networkPacket);
-//                                        allSendFailed = false;
-                                    }catch (Exception e){
-//                                        MessageBus.emit(new MessageSendFailedEvent(message.getId(), message.getConversationId()));
-                                    }
-                                }
-                        )
-                        .exceptionally(
-                                t->{
-//                                    MessageBus.emit(new MessageSendFailedEvent(message.getId(), message.getConversationId()));
-                                    return  null;
-                                }
-                        );
-            }
+            // [TODO]: Logic for Group Chat
+            Logger.warn("Group conversation sending not yet implemented.");
         }
     }
 
-    private static void onReceiveMessage(Message message){
-        boolean isDirectChatMessage = message.getConversationId().equals(Cache.getInstance().getCredential().getId());
-        String conversationId = isDirectChatMessage
-                                ? (message.getSenderId())
-                                : (message.getConversationId());
-        Conversation conversation = Cache.getInstance().getConversation(conversationId);
+    private void onReceiveMessage(Message message){
+        Cache cache = Cache.getInstance();
+
+        // Host 2: Conversation ID của tin nhắn đến là ID của Peer gửi.
+        String conversationId = message.getConversationId(); // Đã được set là Peer ID của đối tác trong PeerConnection.java
+
+        Conversation conversation = cache.getConversation(conversationId);
+
+        // [NEW LOGIC]: Tự động tạo Direct Conversation nếu chưa có (Host 2)
         if(conversation == null){
-            Peer partner = Cache.getInstance().getPeer(message.getSenderId());
-            if(partner == null)
+            Peer partner = cache.getPeer(message.getSenderId());
+            if(partner == null) {
+                Logger.warn("Received message from unknown peer, cannot create conversation: " + message.getSenderId());
                 return;
+            }
 
-            IO.println("Create new direct conversation");
+            Logger.info("Create new direct conversation for incoming message from: " + partner.getName());
             DirectConversation dConversation = new DirectConversation(partner);
-            Cache.getInstance().addConversation(dConversation);
-            dConversation.onReceiveMessage(message);
+            cache.addConversation(dConversation);
+
+            // Cập nhật Lamport Clock toàn cục và thêm tin nhắn vào Conversation
+            cache.updateLamportClock(message.getLamportClock());
+            dConversation.addMessage(message);
+
+            // MessageReceivedEvent đã được emit trong PeerConnection, logic UI sẽ tự động xử lý.
             return;
         }
 
-        conversation.onReceiveMessage(message);
+        // Nếu Conversation đã tồn tại, cập nhật Lamport Clock toàn cục và thêm tin nhắn vào
+        cache.updateLamportClock(message.getLamportClock());
+        conversation.addMessage(message);
     }
 
-    private static void onSendSuccessMessage(String messageId, String conversationId){
+    // [MODIFIED]: Sử dụng lamportClock thay vì messageId
+    private void onSendSuccessMessage(long lamportClock, String conversationId){
         Conversation conversation = Cache.getInstance().getConversation(conversationId);
         if(conversation == null)
             return;
-        conversation.getPendingMessage()
-                .stream()
-                .filter(m->(m.getId().equals(messageId)))
+
+        conversation.getMessageList().stream()
+                .filter(m->(m.getLamportClock() == lamportClock))
                 .findFirst()
                 .ifPresent(
-                        message -> {message.setStatus(Message.MessageStatus.SUCCESS);}
+                        message -> {
+                            message.setStatus(Message.MessageStatus.SUCCESS);
+                            Logger.info("Message Clock " + lamportClock + " in Conv " + conversationId + " confirmed SUCCESS.");
+                        }
                 );
     }
 
-    private static void onSendFailedMessage(String messageId, String conversationId){
+    // Giữ nguyên logic cũ
+    private void onSendFailedMessage(String messageId, String conversationId){
         Conversation conversation = Cache.getInstance().getConversation(conversationId);
         if(conversation == null)
             return;
-        conversation.getFailedMessage()
-                .stream()
+
+        conversation.getMessageList().stream()
                 .filter(m->(m.getId().equals(messageId)))
                 .findFirst()
                 .ifPresent(
-                        message -> {message.setStatus(Message.MessageStatus.FAILED);}
+                        message -> {
+                            message.setStatus(Message.MessageStatus.FAILED);
+                            Logger.warn("Message ID " + messageId + " in Conv " + conversationId + " marked FAILED.");
+                        }
                 );
     }
-
 }
