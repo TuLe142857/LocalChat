@@ -110,17 +110,18 @@ public class Cli {
             IO.println("<Create new conversation>");
         }
         else{
+            IO.println("<message in this conversation>");
             for(var m:conversation.getSuccessMessage()){
-                IO.println("<message in this conversation>");
                 if(m.getSenderId().equals(Cache.getInstance().getCredential().getId())){
                     IO.println("You: " +m.getContent());
                 }
                 else {
                     IO.println(partner.getName() + ": " + m.getContent());
                 }
-                IO.println("<--------------------->");
+
 
             }
+            IO.println("<--------------------->");
         }
 
         String content = IO.readln(">> Message: ");
