@@ -15,6 +15,8 @@ import edu.ptithcm.network.packet.NetworkPacket;
 import edu.ptithcm.security.CryptoUtils;
 import edu.ptithcm.service.AuthService;
 import edu.ptithcm.util.JsonUtils;
+import edu.ptithcm.bus.MessageBus;
+import edu.ptithcm.bus.event.PeerDiscoveryEvent;
 
 public class NetworkService {
 
@@ -262,6 +264,9 @@ public class NetworkService {
         if(discoveryPayload.getPeer().getId().compareTo(Cache.getInstance().getCredential().getId()) != 0){
             IO.println("try add cache");
             Cache.getInstance().addPeer(discoveryPayload.getPeer());
+
+            // [NEW LOGIC]: Phát sự kiện sau khi Peer được thêm vào Cache
+            MessageBus.emit(new PeerDiscoveryEvent(Cache.getInstance().getKnownPeersCollection()));
         }else{
             IO.println("ignore");
             return;

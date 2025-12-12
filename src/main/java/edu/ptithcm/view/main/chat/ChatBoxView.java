@@ -13,27 +13,34 @@ import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
-// Import ChatService để dùng template
-import edu.ptithcm.service.ChatService;
 
 public class ChatBoxView extends BaseView {
 
     private Conversation activeConversation;
-    private final Label conversationNameLabel = new Label("Chọn một cuộc trò chuyện");
-    private final Button addMemberButton = new Button("➕ Thêm thành viên");
-    private final TextArea messageArea = new TextArea();
-    private final TextField inputField = new TextField();
+    // Khai báo mà không gán giá trị tại đây
+    private Label conversationNameLabel;
+    private Button addMemberButton;
+    private TextArea messageArea;
+    private TextField inputField;
 
     private static final String STYLE_HEADER = "-fx-background-color: #e8eaf6; -fx-border-color: #ccc; -fx-border-width: 0 0 1 0;";
     private static final String STYLE_AREA = "-fx-control-inner-background:#fff; -fx-font-family: 'Segoe UI'; -fx-font-size: 14px;";
 
-    @Override protected void init() {}
+    @Override
+    protected void init() {
+        // [FIX]: Khởi tạo tất cả các thành phần UI trong init()
+        conversationNameLabel = new Label("Chọn một cuộc trò chuyện");
+        addMemberButton = new Button("➕ Thêm thành viên");
+        messageArea = new TextArea();
+        inputField = new TextField();
+    }
 
     @Override
     protected void setupUI() {
         BorderPane layout = new BorderPane();
 
         // --- 1. Header ---
+        // Dòng này (Line 37 trong code cũ) bây giờ an toàn vì tất cả các thành phần đã được init()
         HBox headerBox = new HBox(10, conversationNameLabel, addMemberButton);
         headerBox.setAlignment(Pos.CENTER_LEFT);
         headerBox.setPadding(new Insets(10));
@@ -74,13 +81,11 @@ public class ChatBoxView extends BaseView {
         this.getChildren().add(layout);
     }
 
+    // ... (Các hàm khác không thay đổi)
     private void handleSendMessage() {
         if (activeConversation == null) return;
         String content = inputField.getText().trim();
         if (content.isEmpty()) return;
-
-        // [TEMPLATE LOGIC]: Định nghĩa template gọi hàm ChatService (nhưng không gọi)
-        // ChatService.sendMessage(activeConversation, content); // Gói tin sẽ được tạo ở đây
 
         String senderName = Cache.getInstance().getCredential().getName();
         messageArea.appendText(senderName + ": " + content + "\n");
@@ -90,8 +95,6 @@ public class ChatBoxView extends BaseView {
     private void handleAddMember() {
         if (activeConversation instanceof GroupConversation) {
             System.out.println("Mở modal thêm thành viên cho group: " + activeConversation.getName());
-            // [TEMPLATE LOGIC]: Định nghĩa template cho việc thêm thành viên
-            // GroupService.addMember(activeConversation, newMember);
         }
     }
 
@@ -106,7 +109,6 @@ public class ChatBoxView extends BaseView {
             messageArea.clear();
             messageArea.appendText("--- Đang chat với " + conversation.getName() + " ---\n\n");
 
-            // [MOCK DATA]: Thêm một tin nhắn giả lập để test UI
             messageArea.appendText("Peer giả lập: Hello, đây là tin nhắn mock.\n");
         });
     }

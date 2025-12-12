@@ -1,8 +1,11 @@
 package edu.ptithcm.view.main.search;
 
+import edu.ptithcm.bus.MessageBus; // [FIX]: Import MessageBus
+import edu.ptithcm.bus.event.PeerDiscoveryEvent; // [FIX]: Import PeerDiscoveryEvent (Cần đảm bảo file này tồn tại)
 import edu.ptithcm.cache.Cache;
 import edu.ptithcm.model.Peer;
 import edu.ptithcm.view.base.BaseView;
+import javafx.application.Platform; // [FIX]: Import Platform để cập nhật UI Thread
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
@@ -14,6 +17,7 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.VBox;
 
 import java.net.InetAddress;
+import java.util.Collection; // [FIX]: Import Collection
 import java.util.function.Consumer;
 
 // [FIX]: Xóa interface ChatStarter và sử dụng Consumer<Peer> trực tiếp
@@ -21,6 +25,7 @@ public class SearchView extends BaseView {
     private ListView<Peer> peerListView;
     private ObservableList<Peer> availablePeers;
     private final Consumer<Peer> chatStarter; // Sử dụng Consumer<Peer>
+    private Runnable unsubscribeRunnable;
 
     // Constructor sử dụng Consumer<Peer>
     public SearchView(Consumer<Peer> chatStarter) {
@@ -81,8 +86,12 @@ public class SearchView extends BaseView {
                 setGraphic(null);
                 setText(null);
             } else {
-                // [MOCK LOGIC] Kiểm tra ID giả lập
-                if (peer.getId().equals("MOCK_MY_ID")) {
+                // Lấy ID thật sự của bản thân (hoặc null nếu chưa login)
+                String myId = Cache.getInstance().getCredential() != null
+                        ? Cache.getInstance().getCredential().getId()
+                        : null;
+
+                if (peer.getId().equals(myId)) {
                     nameLabel.setText(peer.getName() + " (Bạn)");
                     ipLabel.setText(peer.getIp().getHostAddress());
                     setGraphic(new VBox(10, nameLabel, ipLabel));
@@ -103,18 +112,51 @@ public class SearchView extends BaseView {
 
     @Override
     public void loadData() {
+        // [REAL DATA FETCH]: Lấy dữ liệu khởi tạo lần đầu từ Cache
         availablePeers.clear();
 
-        // [MOCK DATA]: Tạo dữ liệu giả lập
-        try {
-            availablePeers.add(new Peer("MOCK_ID_1", null, "Peer Alice", InetAddress.getByName("192.168.1.101"), 9999));
-            availablePeers.add(new Peer("MOCK_ID_2", null, "Peer Bob", InetAddress.getByName("192.168.1.102"), 9999));
-            availablePeers.add(new Peer("MOCK_MY_ID", null, "My Self", InetAddress.getByName("192.168.1.100"), 9999));
+        // Sử dụng getPeerEntrySet() đã có trong Cache.java và chuyển đổi sang Collection<Peer>
+        Collection<Peer> peers = Cache.getInstance().getPeerEntrySet().stream()
+                .map(java.util.Map.Entry::getValue)
+                .collect(java.util.stream.Collectors.toList());
 
-        } catch (Exception e) {}
+        availablePeers.addAll(peers);
 
-        availablePeers.removeIf(peer -> peer.getId().equals("MOCK_MY_ID"));
+        // Lọc Peer chính mình
+        String myId = Cache.getInstance().getCredential() != null ? Cache.getInstance().getCredential().getId() : null;
+        if(myId != null) availablePeers.removeIf(peer -> peer.getId().equals(myId));
     }
 
-    @Override public void setupEventBus() {}
+    @Override
+    public void setupEventBus() {
+        // [EVENT BUS]: Đăng ký lắng nghe sự kiện PeerDiscoveryEvent
+        MessageBus.subscribe(PeerDiscoveryEvent.class, this::handlePeerDiscovery);
+        this.unsubscribeRunnable = MessageBus.subscribe(PeerDiscoveryEvent.class, this::handlePeerDiscovery);
+    }
+
+    // [EVENT LISTENER]: Xử lý sự kiện PeerDiscoveryEvent
+    private void handlePeerDiscovery(PeerDiscoveryEvent event) {
+        // Bắt buộc chạy trên JavaFX Application Thread để cập nhật UI
+        Platform.runLater(() -> {
+            availablePeers.clear();
+
+            String myId = Cache.getInstance().getCredential() != null
+                    ? Cache.getInstance().getCredential().getId()
+                    : null;
+
+            // Lọc ra peer của mình và thêm vào danh sách hiển thị
+            event.getDiscoveredPeers().stream()
+                    .filter(peer -> myId == null || !peer.getId().equals(myId))
+                    .forEach(availablePeers::add);
+        });
+    }
+
+    @Override
+    public void onRemove() {
+        super.onRemove();
+        // [FIX]: Gọi run() trên đối tượng Runnable đã lưu
+        if (this.unsubscribeRunnable != null) {
+            this.unsubscribeRunnable.run();
+        }
+    }
 }

@@ -9,6 +9,8 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.Collection;
+import java.util.Collections;
 
 public class Cache {
     private static final Cache instance = new Cache();
@@ -83,5 +85,8 @@ public class Cache {
     }
     public Conversation getConversation(String id){
         return this.conversations.get(id);
+    }
+    public Collection<Peer> getKnownPeersCollection(){
+        return Collections.unmodifiableCollection(knownPeers.values());
     }
 }
