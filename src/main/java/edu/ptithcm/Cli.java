@@ -25,6 +25,8 @@ public class Cli {
 
     static void main() throws Exception{
         LogConfig.config(false, true);
+
+        IO.println("Hello, code ui ko kịp test đỡ bằng terminal");
         String name = IO.readln("Your name: ");
         InetAddress ip = InetAddress.getByName(IO.readln("ip: "));
         int port = Integer.parseInt(IO.readln("Port: "));
@@ -46,15 +48,47 @@ public class Cli {
     }
 
     static void showCache(String []args){
-        IO.println("Peer list: ");
+        IO.println("===============================");
+        IO.println("       Data stored in cache");
+        IO.println("===============================");
+        IO.println("Self information:");
+        IO.println("Id: " + Cache.getInstance().getCredential().getId());
+        IO.println("PublicKey: " + CryptoUtils.publicKeyToString(Cache.getInstance().getCredential().getPublicKey()));
+        IO.println("PrivateKey: "+CryptoUtils.privateKeyToString(Cache.getInstance().getCredential().getPrivateKey()));
+        IO.println("Name: "+ Cache.getInstance().getCredential().getName());
+        IO.println("IP: " + Cache.getInstance().getIp());;
+        IO.println("Port: " +Cache.getInstance().getPort());
+        IO.println();
+
+        IO.println("Known Peer list: ");
         for (var entry : Cache.getInstance().getPeerEntrySet()){
-            IO.println(JsonUtils.toJson(entry.getValue()));
+            Peer peer = entry.getValue();
+            IO.println("Id: " + peer.getId());
+            IO.println("PublicKey: " + CryptoUtils.publicKeyToString(peer.getPublicKey()));
+            IO.println("Name: " + peer.getName());
+            IO.println("IP: " + peer.getIp());
+            IO.println("Port: "+ peer.getPort());
+            IO.println();
         }
 
 
         IO.println("Conversation list:");
         for (var c : Cache.getInstance().getConversationList()){
-            IO.println(JsonUtils.toJson(c));
+            IO.println("Id: " + c.getId());
+            IO.println("Name: " + c.getName());
+            IO.println("Type: " + ((c instanceof DirectConversation)?("DirectConversation"):("GroupConversation")));
+            if(c instanceof GroupConversation){
+                GroupConversation g = (GroupConversation)(c);
+                IO.println("Number of participants: " + g.getParticipantList().size());
+            }
+            else{
+                DirectConversation d = (DirectConversation) (c);
+                IO.println("Partner Id: " + d.getPartner().getId());
+            }
+            IO.println("Number of success message: " + c.getSuccessMessage().size());
+            IO.println("Number of pending message: " + c.getPendingMessage().size());
+            IO.println("Number of send failed message: " + c.getFailedMessage().size());
+            IO.println();
         }
     }
 
@@ -70,6 +104,7 @@ public class Cli {
         Conversation conversation = Cache.getInstance().getConversation(peerId);
         if(conversation == null){
             conversation = new DirectConversation(partner);
+            Cache.getInstance().addConversation(conversation);
         }
         else{
             for(var m:conversation.getSuccessMessage()){

@@ -35,6 +35,13 @@ public class PeerConnection {
     private final ExecutorService executor;
 
     public PeerConnection(Peer peer, Socket socket, SecretKey sessionKey) throws IOException {
+        Logger.debug(
+                String.format(
+                        "New PeerConnection created: peerId: %s localSocketIP: %s, remoteSocketIP: %s",
+                        peer.getId(),
+                        socket.getLocalAddress().toString(),
+                        socket.getRemoteSocketAddress().toString())
+        );
         this.peer = peer;
         this.socket = socket;
         this.sessionKey = sessionKey;
@@ -47,12 +54,19 @@ public class PeerConnection {
 
     //encypt & send
     public synchronized void sendNetworkPacket(NetworkPacket packet) throws IOException {
+        Logger.debug(
+                String.format(
+                        "Send NetworkPacket type = %s to %s through %s",
+                        packet.getPacketType().toString(),
+                        socket.getRemoteSocketAddress().toString(),
+                        socket.getLocalSocketAddress().toString())
+        );
         String plainJson = JsonUtils.toJson(packet);
         String encryptedJson = CryptoUtils.encryptAES(plainJson, this.sessionKey);
         if(encryptedJson == null)
             throw new RuntimeException("How ???????");
 
-        byte []buf =encryptedJson.getBytes(StandardCharsets.UTF_8);
+        byte []buf = encryptedJson.getBytes(StandardCharsets.UTF_8);
         dataOutputStream.writeInt(buf.length);
         dataOutputStream.write(buf);
     }
@@ -62,13 +76,24 @@ public class PeerConnection {
         try{
             while(running){
                 int length = dataInputStream.readInt();
-                if (length < 0) throw new IOException("Invalid length");
+                if (length < 0){
+                    Logger.error("Invalid length of network packet received");
+                    throw new IOException("Invalid length");
+                }
                 byte [] buf = new byte[length];
                 dataInputStream.readFully(buf);
 
                 String encryptedJson = new String(buf, StandardCharsets.UTF_8);
                 String plainJson = CryptoUtils.decryptAES(encryptedJson, this.sessionKey);
                 NetworkPacket networkPacket = JsonUtils.fromJson(plainJson, NetworkPacket.class);
+                Logger.debug(
+                        String.format(
+                                "Get NetworkPacket type = %s from %s through %s",
+                                networkPacket.getPacketType().toString(),
+                                socket.getRemoteSocketAddress().toString(),
+                                socket.getLocalSocketAddress().toString()
+                        )
+                );
 
                 if(networkPacket.getPacketType() == NetworkPacket.PacketType.HEART_BEAT){
                     this.lastHeartbeat = System.currentTimeMillis();
@@ -84,7 +109,7 @@ public class PeerConnection {
                     MessageAckPayload messageAckPayload = networkPacket.getPayloadAs(MessageAckPayload.class);
                     MessageBus.emit(new MessageSendSuccessEvent(messageAckPayload.getMessageId(), messageAckPayload.getConversationId()));
                 }else{
-                    Logger.info("Unexpected NetworkPacket type to PeerConnection " + peer.getId() +" : " + networkPacket.getPacketType());
+                    Logger.warn("Unexpected NetworkPacket type to PeerConnection " + peer.getId() +" : " + networkPacket.getPacketType());
                 }
             }
         }
