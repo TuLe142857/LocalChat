@@ -315,7 +315,7 @@ public class ChatService {
                 Cache.getInstance().getCredential().getId(),0,
                 SyncMetadataResponsePayload.GroupConversationInfo.getFrom(groupConversation)
         );
-        syncPayload.verify(Cache.getInstance().getCredential().getPublicKey());
+        syncPayload.sign(Cache.getInstance().getCredential().getPrivateKey());
         NetworkPacket syncPacket = new NetworkPacket(NetworkPacket.PacketType.SYNC_METADATA_RESPONSE, JsonUtils.toJson(syncPayload));
         ConnectionPool.getInstance().getOrConnect(senderPeer)
                 .thenAccept(
