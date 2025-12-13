@@ -213,7 +213,8 @@ public class SyncService {
             }
 
             // request fetch data
-            long minLamportClock = groupConversation.getMessageList().getFirst().getLamportClock();
+            List<Message> messageList = groupConversation.getMessageList();
+            long minLamportClock = (messageList.isEmpty()) ? (groupConversation.getLamportClock()) : (messageList.getFirst().getLamportClock());
             requestFetchMessageGroupConversation(groupConversation.getId(), senderPeer.getId(), minLamportClock, 50);
         }
     }
@@ -223,31 +224,42 @@ public class SyncService {
         if(senderPeer == null || (!request.verify(senderPeer.getPublicKey()))){
             return;
         }
-
+        Conversation conversation = Cache.getInstance().getConversation(senderPeer.getId());
+        if(conversation == null){
+            return;
+        }
         boolean isDirectChat = request.getConversationId().equals(Cache.getInstance().getCredential().getId());
 
-        List<Message> responseMessageList = new ArrayList<>();
         if(isDirectChat){
-            Conversation conv = Cache.getInstance().getConversation(senderPeer.getId());
-            if(conv == null){
+            // check direct chat id = sender id
+            if(! request.getConversationId().equals(request.getSenderId())){
+                Logger.warn("Invalid fetch message request for direct conversation: sender.peerId and conversation.id not match!");
                 return;
             }
-            List<Message> allMessage = conv.getSuccessMessage();
-            int count = 0;
-            int size = allMessage.size();
-            for(int i = size-1; i >= 0; i-- ){
-                Message message = allMessage.get(i);
-                if(message.getLamportClock() <= request.getClockBefore()){
-                    responseMessageList.add(message);
-                    count ++;
-                    if(count >= request.getLimit())
-                        break;
-                }
-            }
         }else{
-            Logger.warn("Chưa code xong sync group :))");
+            // check if sender in this group
+            GroupConversation groupConversation = (GroupConversation) (conversation);
+            if(groupConversation.getParticipant(request.getSenderId()) == null){
+                Logger.warn("Invalid fetch message request for group conversation: sender do not in this group!");
+                return;
+            }
         }
 
+        List<Message> responseMessageList = new ArrayList<>();
+        List<Message> allMessage = conversation.getSuccessMessage();
+        int count = 0;
+        int size = allMessage.size();
+        for(int i = size-1; i >= 0; i -- ){
+            Message message = allMessage.get(i);
+            if(message.getLamportClock() <= request.getClockBefore()){
+                responseMessageList.add(message);
+                count ++;
+                if(count >= request.getLimit())
+                    break;
+            }
+        }
+
+        // send
         FetchMessageResponsePayload responsePayload = new FetchMessageResponsePayload(
                 Cache.getInstance().getCredential().getId(),
                 (isDirectChat)?(senderPeer.getId()):(request.getConversationId()),
@@ -292,7 +304,19 @@ public class SyncService {
             }
         }
         else {
-            Logger.warn("Chua code sync group");
+//            Logger.warn("Chua code sync group");
+            Conversation conv = Cache.getInstance().getConversation(response.getSenderId());
+            if(response.getMessages().isEmpty()){
+                return;
+            }
+            Logger.debug("Get sync group chat from: " + response.getSenderId() +" num of message = " + response.getMessages().size());
+            for(var message:response.getMessages()){
+                conv.onReceiveMessage(message);
+            }
+            Message firstMessage = conv.getSuccessMessage().getFirst();
+            if(firstMessage != null && firstMessage.getLamportClock() > 1){
+                requestFetchMessageDirectConversation(conv.getId(), firstMessage.getLamportClock(), 50);
+            }
         }
     }
 }
