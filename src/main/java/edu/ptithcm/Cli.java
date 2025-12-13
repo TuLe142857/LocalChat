@@ -108,13 +108,17 @@ public class Cli {
             IO.println("No conversation match id "+ conversation_id);
             return;
         }
-        printConversationDetail(conversation, true);
-        String content = IO.readln("\nType message to send: \n>>");
-        Message message = conversation.createMessage(content);
-        ChatService.sendMessage(message);
+        while (true){
+            printConversationDetail(conversation, true);
+            String content = IO.readln("\nType message to send(or enter to exit): \n>>");
+            if(content.isEmpty())
+                break;
+            Message message = conversation.createMessage(content);
+            ChatService.sendMessage(message);
+        }
     }
 
-    static void create_group(String args[]){
+    static void create_group(String []args){
         String gName = IO.readln("Group name: ");
         ArrayList<String> invitedPeerId = new ArrayList<>();
         while(true){
