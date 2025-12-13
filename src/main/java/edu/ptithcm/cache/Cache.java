@@ -1,7 +1,10 @@
 package edu.ptithcm.cache;
 
+import edu.ptithcm.bus.MessageBus;
+import edu.ptithcm.bus.event.NewConversationEvent;
 import edu.ptithcm.model.Conversation;
 import edu.ptithcm.model.Credential;
+import edu.ptithcm.model.Message;
 import edu.ptithcm.model.Peer;
 
 import java.net.InetAddress;
@@ -38,6 +41,7 @@ public class Cache {
         port  = -1;
         knownPeers.clear();
         conversations.clear();
+        pendingInviteGroupMember.clear();
     }
 
     public Peer getMyPeer(){
@@ -72,7 +76,9 @@ public class Cache {
     }
 
     public void addConversation(Conversation conversation){
-        this.conversations.putIfAbsent(conversation.getId(), conversation);
+        if(this.conversations.putIfAbsent(conversation.getId(), conversation) == null){
+            MessageBus.emit(new NewConversationEvent(conversation.getId()));
+        }
     }
 
     public boolean removeConversation(String id){

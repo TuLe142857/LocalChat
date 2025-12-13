@@ -4,7 +4,7 @@ import edu.ptithcm.bus.MessageBus;
 import edu.ptithcm.bus.event.MessageReceivedEvent;
 import edu.ptithcm.bus.event.MessageSendFailedEvent;
 import edu.ptithcm.bus.event.MessageSendSuccessEvent;
-import edu.ptithcm.bus.event.MessageSendingEvent;
+
 import edu.ptithcm.cache.Cache;
 import edu.ptithcm.model.*;
 import edu.ptithcm.network.core.ConnectionPool;
@@ -23,26 +23,26 @@ public class ChatService {
     // Key: groupId, value: list of peer id
 
     public static void init(){
-        MessageBus.subscribe(
-                MessageSendingEvent.class,
-                messageSendingEvent -> {
-                    ChatService.sendMessage(messageSendingEvent.getMessage());
-                }
-        );
-
-        MessageBus.subscribe(
-                MessageReceivedEvent.class,
-                messageReceivedEvent -> {
-                    ChatService.onReceiveMessage(messageReceivedEvent.getMessage());
-                }
-        );
-
-        MessageBus.subscribe(
-                MessageSendSuccessEvent.class,
-                messageSendSuccessEvent -> {
-                    ChatService.onSendSuccessMessage(messageSendSuccessEvent.getMessageId(), messageSendSuccessEvent.getConversationId());
-                }
-        );
+//        MessageBus.subscribe(
+//                MessageSendingEvent.class,
+//                messageSendingEvent -> {
+//                    ChatService.sendMessage(messageSendingEvent.getMessage());
+//                }
+//        );
+//
+//        MessageBus.subscribe(
+//                MessageReceivedEvent.class,
+//                messageReceivedEvent -> {
+//                    ChatService.onReceiveMessage(messageReceivedEvent.getMessage());
+//                }
+//        );
+//
+//        MessageBus.subscribe(
+//                MessageSendSuccessEvent.class,
+//                messageSendSuccessEvent -> {
+//                    ChatService.onSendSuccessMessage(messageSendSuccessEvent.getMessageId(), messageSendSuccessEvent.getConversationId());
+//                }
+//        );
 
         MessageBus.subscribe(
                 MessageSendFailedEvent.class,

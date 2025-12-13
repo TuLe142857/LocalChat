@@ -29,7 +29,7 @@ public class HandshakeAckPayload implements Signable {
 
     @Override
     public String getSignableData() {
-        return senderId+ accept + timestamp;
+        return senderId + accept + timestamp;
     }
 
     @Override

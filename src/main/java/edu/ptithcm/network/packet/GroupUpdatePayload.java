@@ -52,7 +52,7 @@ public class GroupUpdatePayload implements Signable {
 
     @Override
     public String getSignableData() {
-        return groupId + action.toString() + targetPeer.getId() + timestamp;
+        return senderId + groupId + action.toString() + targetPeer.getId() + timestamp;
     }
 
     @Override

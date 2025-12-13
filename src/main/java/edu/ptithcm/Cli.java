@@ -1,7 +1,6 @@
 package edu.ptithcm;
 
 import edu.ptithcm.bus.MessageBus;
-import edu.ptithcm.bus.event.MessageSendingEvent;
 import edu.ptithcm.cache.Cache;
 import edu.ptithcm.model.*;
 import edu.ptithcm.network.NetworkService;

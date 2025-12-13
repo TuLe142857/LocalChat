@@ -38,7 +38,7 @@ public class FetchMessageResponsePayload implements Signable {
 
     @Override
     public String getSignableData() {
-        return "";
+        return senderId + conversationId + timestamp;
     }
 
     @Override
