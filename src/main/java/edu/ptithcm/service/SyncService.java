@@ -189,7 +189,7 @@ public class SyncService {
             int size = allMessage.size();
             for(int i = size-1; i >= 0; i-- ){
                 Message message = allMessage.get(i);
-                if(message.getLamportClock() < request.getClockBefore()){
+                if(message.getLamportClock() <= request.getClockBefore()){
                     responseMessageList.add(message);
                     count ++;
                     if(count >= request.getLimit())
@@ -227,17 +227,14 @@ public class SyncService {
             return;
         }
 
-        Conversation conv = Cache.getInstance().getConversation(response.getConversationId());
-        if(conv == null){
-            return;
-        }
-        boolean isDirectChat = conv instanceof DirectConversation;
+        boolean isDirectChat = response.getConversationId().equals(Cache.getInstance().getCredential().getId());
 
         if(isDirectChat){
+            Conversation conv = Cache.getInstance().getConversation(response.getSenderId());
             if(response.getMessages().isEmpty()){
                 return;
             }
-            Logger.debug("Get sync direct chat from: " + response.getSenderId());
+            Logger.debug("Get sync direct chat from: " + response.getSenderId() +" num of message = " + response.getMessages().size());
             for(var message:response.getMessages()){
                 conv.onReceiveMessage(message);
             }
