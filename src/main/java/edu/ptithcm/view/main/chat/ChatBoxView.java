@@ -145,7 +145,11 @@ public class ChatBoxView extends BaseView {
 
     // NEW LOGIC: Rework updateMessageArea để tạo Bubble Chat
     private void updateMessageArea() {
-        if (activeConversation == null) return;
+        Logger.debug("Update message area");
+        if (activeConversation == null) {
+            Logger.debug("Bi Null roi ne===================================");
+            return;
+        }
 
         Platform.runLater(() -> {
             messageContainer.getChildren().clear();
@@ -154,6 +158,7 @@ public class ChatBoxView extends BaseView {
             for (Message m : activeConversation.getMessageList()) {
                 boolean isMe = m.getSenderId().equals(myId);
                 String statusMarker = getStatusMarker(m.getStatus());
+                Logger.debug(m.getStatus());
 
                 // 1. Tạo Label chứa nội dung tin nhắn
                 Label contentLabel = new Label(m.getContent());
@@ -261,7 +266,9 @@ public class ChatBoxView extends BaseView {
     // Logic này cập nhật icon trạng thái tin nhắn gửi đi (SUCCESS)
     private void handleMessageSuccess(MessageSendSuccessEvent event) {
         // Chỉ cập nhật UI nếu tin nhắn thuộc Conversation đang mở
+        Logger.info("SUCCESS ROI NE============================");
         if (activeConversation != null && activeConversation.getId().equals(event.getConversationId())) {
+            Logger.info("Ko thoa dieu kien roi ma oi");
             Platform.runLater(this::updateMessageArea);
         }
     }

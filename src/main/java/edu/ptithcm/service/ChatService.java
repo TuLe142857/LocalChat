@@ -18,6 +18,8 @@ import edu.ptithcm.util.JsonUtils;
 import org.tinylog.Logger;
 import edu.ptithcm.network.packet.MessagePayload;
 
+import java.util.List;
+
 public class ChatService {
 
     private static ChatService instance;
@@ -133,8 +135,37 @@ public class ChatService {
     // [MODIFIED]: Sử dụng lamportClock thay vì messageId
     private void onSendSuccessMessage(long lamportClock, String conversationId){
         Conversation conversation = Cache.getInstance().getConversation(conversationId);
-        if(conversation == null)
+        IO.println("ID cua conversation dag tim" + conversationId);
+        List<Conversation> lst_con= Cache.getInstance().getConversationList();
+        for (Conversation c : lst_con) {
+            IO.println("---------------------------------");
+            IO.println("ID: " + c.getId()); // Lấy ID của Conversation
+            IO.println("Tên: " + c.getName()); // Lấy tên của Conversation
+
+            if (c instanceof DirectConversation) {
+                DirectConversation d = (DirectConversation) c;
+                IO.println("Loại: Direct Chat");
+                // Lấy ID của đối tác
+                IO.println("Đối tác ID: " + d.getPartner().getId());
+            } else if (c instanceof GroupConversation) {
+                GroupConversation g = (GroupConversation) c;
+                IO.println("Loại: Group Chat");
+                // Lấy số lượng thành viên
+                IO.println("Số thành viên: " + g.getParticipantList().size());
+            } else {
+                IO.println("Loại: Unknown");
+            }
+
+            // In trạng thái tin nhắn
+            IO.println("Tin nhắn thành công: " + c.getSuccessMessage().size());
+            IO.println("Tin nhắn đang chờ: " + c.getPendingMessage().size());
+            IO.println("Last Lamport Clock: " + c.getLamportClock()); // Lamport Clock cao nhất
+        }
+
+        if(conversation == null) {
+            Logger.warn("Bi null me roi");
             return;
+        }
 
         conversation.getMessageList().stream()
                 .filter(m->(m.getLamportClock() == lamportClock))
