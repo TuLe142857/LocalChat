@@ -160,7 +160,7 @@ public class ChatBoxView extends BaseView {
                 contentLabel.setWrapText(true);
                 contentLabel.setMaxWidth(400);
 
-                // 2. Tạo Label chứa tên người gửi và trạng thái
+                // 2. Tạo Label chứa trạng thái/tên người gửi
                 Label statusInfoLabel = new Label();
                 statusInfoLabel.setStyle("-fx-font-size: 0.8em; -fx-text-fill: #888;");
 
@@ -179,11 +179,11 @@ public class ChatBoxView extends BaseView {
                 VBox bubble = new VBox(2); // VBox chứa trạng thái/tên và nội dung
 
                 if(isMe){
-                    // Tin nhắn của tôi: [Nội dung] và [Trạng thái] nằm dưới
+                    // Tin nhắn của tôi: [Nội dung] và [Trạng thái] nằm dưới, căn phải
                     bubble.setAlignment(Pos.CENTER_RIGHT);
                     bubble.getChildren().addAll(contentLabel, statusInfoLabel);
                 } else {
-                    // Tin nhắn của người khác: [Tên] và [Nội dung]
+                    // Tin nhắn của người khác: [Tên] và [Nội dung], căn trái
                     bubble.setAlignment(Pos.CENTER_LEFT);
                     bubble.getChildren().addAll(statusInfoLabel, contentLabel);
                 }
@@ -247,6 +247,7 @@ public class ChatBoxView extends BaseView {
         unsubscribeSuccess = MessageBus.subscribe(MessageSendSuccessEvent.class, this::handleMessageSuccess);
     }
 
+    // Logic này vẫn đảm bảo cập nhật tin nhắn đến (tự động)
     private void handleMessageReceived(MessageReceivedEvent event) {
         Platform.runLater(() -> {
             if (activeConversation == null) return;
@@ -257,8 +258,9 @@ public class ChatBoxView extends BaseView {
         });
     }
 
+    // Logic này cập nhật icon trạng thái tin nhắn gửi đi (SUCCESS)
     private void handleMessageSuccess(MessageSendSuccessEvent event) {
-        // Cập nhật trạng thái (icon) cho tin nhắn gửi đi
+        // Chỉ cập nhật UI nếu tin nhắn thuộc Conversation đang mở
         if (activeConversation != null && activeConversation.getId().equals(event.getConversationId())) {
             Platform.runLater(this::updateMessageArea);
         }

@@ -125,7 +125,7 @@ public class ChatListView extends BaseView {
             if (convToSelect != null) {
                 // Nếu Conversation vừa nhận đang được chọn (trước khi reload)
                 if (isTargetCurrentlySelected) {
-                    // **BƯỚC SỬA LỖI QUAN TRỌNG NHẤT:** // Phải clear selection trước khi select lại cùng một đối tượng (hoặc đối tượng mới cùng ID)
+                    // **BƯỚC SỬA LỖI HIGHLIGHT/LISTENER:** Phải clear selection trước khi select lại cùng một đối tượng (hoặc đối tượng mới cùng ID)
                     // để buộc Listener fired và ListView tô màu lại.
                     conversationListView.getSelectionModel().clearSelection();
                 }
