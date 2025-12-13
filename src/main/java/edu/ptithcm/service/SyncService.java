@@ -11,6 +11,18 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * <pre>
+ *  Sync:
+ *  - Metadata Sync
+ *  - Message Sync
+ *
+ *  Workflow example, peer A make request sync data from peer B:
+ *      A [request sync] => B
+ *      B [handle request sync][send response] =>A
+ *      A [handle response][update data]
+ * </pre>
+ */
 public class SyncService {
 
     /**
@@ -20,25 +32,179 @@ public class SyncService {
 
     }
 
+    /* =====================================================================
+                    METADATA SYNC
+                    - CONVERSATION ID
+                    - CONVERSATION LAMPORT CLOCK
+                    - PARTICIPANTS LIST(GROUP CHAT)
+     =======================================================================*/
 
+    /**
+     *
+     * @param targetPeer
+     */
     public static void requestSyncMetadata(Peer targetPeer){
         Logger.debug("Send request sync metadata to peer " + targetPeer.getId());
         ConnectionPool.getInstance().getOrConnect(targetPeer)
                 .thenAccept(
                         peerConnection -> {
                             SyncMetadataRequestPayload payload = new SyncMetadataRequestPayload(Cache.getInstance().getCredential().getId());
-                            //sign
                             payload.sign(Cache.getInstance().getCredential().getPrivateKey());
                             NetworkPacket networkPacket = new NetworkPacket(NetworkPacket.PacketType.SYNC_METADATA_REQUEST, JsonUtils.toJson(payload));
                             try {
                                 peerConnection.sendNetworkPacket(networkPacket);
                             } catch (IOException e) {
-//                                throw new RuntimeException(e);
                                 Logger.warn("Request syns metadata failed(connection error); targetPeerId = " + targetPeer.getId());
                             }
                         }
                 );
     }
+
+    /**
+     * Handle Sync Metadata Request from another Peer, check/verify and send response
+     * @param request
+     */
+    public static void handleSyncMetadataRequest(SyncMetadataRequestPayload request){
+        Logger.debug("Handle sync metadata request from peer" + request.getSenderId());
+        /*------------------------------------------
+                        VERIFY REQUEST
+         -------------------------------------------*/
+        Peer senderPeer = Cache.getInstance().getPeer(request.getSenderId());
+        if(senderPeer == null){
+            Logger.error("Handle request sync metadata but targetPeer is null, id = " + request.getSenderId());
+            return;
+        }
+        if(!request.verify(senderPeer.getPublicKey())){
+            Logger.error("Verify signature of SyncMetadataRequestPayload failed, peerID: " + request.getSenderId());
+            return;
+        }
+
+        /*------------------------------------------
+                MAKE RESPONSE PAYLOAD & SEND
+         -------------------------------------------*/
+        // DIRECT CONVERSATION
+        Conversation directConversation = Cache.getInstance().getConversation(senderPeer.getId());
+        long directChatClock = (directConversation != null) ? (directConversation.getLamportClock()) : (0);
+
+        // GROUP CONVERSATION
+        List<SyncMetadataResponsePayload.GroupConversationInfo> groupConversationInfoList = new ArrayList<>();
+        for(var conv : Cache.getInstance().getConversationList()){
+            if (! (conv instanceof GroupConversation))
+                continue;
+
+            // check
+            if(((GroupConversation)(conv)).getParticipant(senderPeer.getId()) != null){
+                groupConversationInfoList.add(
+                    new SyncMetadataResponsePayload.GroupConversationInfo(
+                            conv.getId(),
+                            conv.getName(),
+                            conv.getLamportClock(),
+                            ((GroupConversation) conv).getParticipantList()
+                    )
+                );
+            }
+//            for (var participant : ((GroupConversation) conv).getParticipantList()){
+//                if(participant.getId().equals(request.getSenderId())){
+//                    groupConversationInfoList.add(
+//                            new SyncMetadataResponsePayload.GroupConversationInfo(
+//                                    conv.getId(),
+//                                    conv.getName(),
+//                                    conv.getLamportClock(),
+//                                    ((GroupConversation) conv).getParticipantList()
+//                            )
+//                    );
+//                    break;
+//                }
+//            }
+        }
+
+        // SEND
+        SyncMetadataResponsePayload payload = new SyncMetadataResponsePayload(
+                Cache.getInstance().getCredential().getId(),
+                directChatClock,
+                groupConversationInfoList
+        );
+        payload.sign(Cache.getInstance().getCredential().getPrivateKey());
+        NetworkPacket networkPacket = new NetworkPacket(NetworkPacket.PacketType.SYNC_METADATA_RESPONSE, JsonUtils.toJson(payload));
+
+        ConnectionPool.getInstance().getOrConnect(senderPeer)
+                .thenAccept(
+                        peerConnection -> {
+                            try{
+                                peerConnection.sendNetworkPacket(networkPacket);
+                            }catch (Exception e){
+                                Logger.warn("Send response sync metadata fata failed to peer " + request.getSenderId() +" : connection error");
+                            }
+                        }
+                );
+    }
+
+    /**
+     * Handle Sync Metadata response from another peer
+     * @param responsePayload
+     */
+    public static void handleSyncMetadataResponse(SyncMetadataResponsePayload responsePayload){
+        Peer senderPeer = Cache.getInstance().getPeer(responsePayload.getSenderId());
+        if(senderPeer == null){
+            return;
+        }
+
+        if(!responsePayload.verify(senderPeer.getPublicKey())){
+            Logger.error("Verify signature failed");
+            return;
+        }
+
+        // sync direct chat
+        if(
+                (Cache.getInstance().getConversation(responsePayload.getSenderId()) == null)
+                        && (responsePayload.getDirectChatClock() > 0))
+        {
+            DirectConversation dConv = new DirectConversation(senderPeer);
+            dConv.setLamportClock(responsePayload.getDirectChatClock());
+
+            Cache.getInstance().addConversation(dConv);
+
+            requestFetchMessageDirectConversation(senderPeer.getId(), responsePayload.getDirectChatClock(), 50);
+        }
+
+
+//         group chat
+        for(var groupInfo : responsePayload.getGroupConversationInfoList()){
+            if(Cache.getInstance().getConversation(groupInfo.getGroupId()) == null){
+                GroupConversation groupConversation = new GroupConversation(groupInfo.getGroupName(), groupInfo.getGroupId());
+                Cache.getInstance().addConversation(groupConversation);
+            }
+
+            GroupConversation groupConversation = (GroupConversation) (Cache.getInstance().getConversation(groupInfo.getGroupId()));
+
+            // update clock
+            groupConversation.setLamportClock(Math.max(groupConversation.getLamportClock(), groupInfo.getClock()));
+
+            //update participants
+            for(var participant : groupInfo.getParticipants()){
+                // Chỉ dùng Peer trong cached
+                Peer cachedPeer = Cache.getInstance().getPeer(participant.getId());
+                if(cachedPeer == null){
+                    Cache.getInstance().addPeer(participant);
+                    cachedPeer = participant;
+                }
+
+                // this function will check existing before add
+                groupConversation.addParticipants(cachedPeer);
+            }
+
+            // request fetch message
+            List<Message> messageList = groupConversation.getMessageList();
+            long minLamportClock = (messageList.isEmpty()) ? (groupConversation.getLamportClock()) : (messageList.getFirst().getLamportClock());
+            requestFetchMessageGroupConversation(groupConversation.getId(), senderPeer.getId(), minLamportClock, 50);
+        }
+    }
+
+    /* =====================================================================
+                MESSAGE SYNC
+                - DIRECT CONVERSATION MESSAGE
+                - GROUP CONVERSATION MESSAGE
+    =======================================================================*/
 
     public static void requestFetchMessageDirectConversation(String conversationId, long clockBefore, long messageLimit){
         Conversation conv = Cache.getInstance().getConversation(conversationId);
@@ -102,142 +268,27 @@ public class SyncService {
 
     }
 
-    public static void handleSyncMetadataRequest(SyncMetadataRequestPayload request){
-        Logger.debug("Handle sync metadata request from peer" + request.getSenderId());
-        // verify ...
-        Peer targetPeer = Cache.getInstance().getPeer(request.getSenderId());
-        if(targetPeer == null){
-            Logger.error("Handle request sync metadata but targetPeer is null, id = " + request.getSenderId());
-            return;
-        }
-        if(!request.verify(targetPeer.getPublicKey())){
-            Logger.error("Verify signature of SyncMetadataRequestPayload failed, peerID: " + request.getSenderId());
-            return;
-        }
-
-        // find data
-        Conversation directConversation = Cache.getInstance().getConversation(targetPeer.getId());
-        long directChatClock = (directConversation != null) ? (directConversation.getLamportClock()) : (0);
-        List<SyncMetadataResponsePayload.GroupConversationInfo> groupConversationInfoList = new ArrayList<>();
-        for(var conv : Cache.getInstance().getConversationList()){
-            if (! (conv instanceof GroupConversation))
-                continue;
-
-            // check
-            for (var participant : ((GroupConversation) conv).getParticipantList()){
-                if(participant.getId().equals(request.getSenderId())){
-                    groupConversationInfoList.add(
-                            new SyncMetadataResponsePayload.GroupConversationInfo(
-                                    conv.getId(),
-                                    conv.getName(),
-                                    conv.getLamportClock(),
-                                    ((GroupConversation) conv).getParticipantList()
-                            )
-                    );
-                    break;
-                }
-            }
-        }
-
-        // make network packet
-        SyncMetadataResponsePayload payload = new SyncMetadataResponsePayload(
-                Cache.getInstance().getCredential().getId(),
-                directChatClock,
-                groupConversationInfoList
-        );
-        payload.sign(Cache.getInstance().getCredential().getPrivateKey());
-        NetworkPacket networkPacket = new NetworkPacket(NetworkPacket.PacketType.SYNC_METADATA_RESPONSE, JsonUtils.toJson(payload));
-
-
-        // send reply
-        ConnectionPool.getInstance().getOrConnect(targetPeer)
-                .thenAccept(
-                        peerConnection -> {
-                            try{
-                                peerConnection.sendNetworkPacket(networkPacket);
-                            }catch (Exception e){
-                                Logger.warn("Send response sync metadata fata failed to peer " + request.getSenderId() +" : connection error");
-                            }
-                        }
-                );
-    }
-
-    public static void handleSyncMetadataResponse(SyncMetadataResponsePayload responsePayload){
-        Peer senderPeer = Cache.getInstance().getPeer(responsePayload.getSenderId());
-        if(senderPeer == null){
-            return;
-        }
-
-        if(!responsePayload.verify(senderPeer.getPublicKey())){
-            Logger.error("Verify signature failed");
-            return;
-        }
-
-        // sync direct chat
-        if(
-                (Cache.getInstance().getConversation(responsePayload.getSenderId()) == null)
-                && (responsePayload.getDirectChatClock() > 0))
-        {
-            DirectConversation dConv = new DirectConversation(senderPeer);
-            dConv.setLamportClock(responsePayload.getDirectChatClock());
-
-            Cache.getInstance().addConversation(dConv);
-
-            requestFetchMessageDirectConversation(senderPeer.getId(), responsePayload.getDirectChatClock(), 50);
-        }
-
-
-//         group chat
-        for(var groupInfo : responsePayload.getGroupConversationInfoList()){
-            if(Cache.getInstance().getConversation(groupInfo.getGroupId()) == null){
-                GroupConversation groupConversation = new GroupConversation(groupInfo.getGroupName(), groupInfo.getGroupId());
-                Cache.getInstance().addConversation(groupConversation);
-            }
-
-            GroupConversation groupConversation = (GroupConversation) (Cache.getInstance().getConversation(groupInfo.getGroupId()));
-
-            // update clock
-            groupConversation.setLamportClock(Math.max(groupConversation.getLamportClock(), groupInfo.getClock()));
-
-            //update participants
-            for(var participant : groupInfo.getParticipants()){
-                // Chỉ dùng Peer trong cached
-                Peer cachedPeer = Cache.getInstance().getPeer(participant.getId());
-                if(cachedPeer == null){
-                    Cache.getInstance().addPeer(participant);
-                    cachedPeer = participant;
-                }
-
-                // this function will check existing before add
-                groupConversation.addParticipants(cachedPeer);
-            }
-
-            // request fetch data
-            List<Message> messageList = groupConversation.getMessageList();
-            long minLamportClock = (messageList.isEmpty()) ? (groupConversation.getLamportClock()) : (messageList.getFirst().getLamportClock());
-            requestFetchMessageGroupConversation(groupConversation.getId(), senderPeer.getId(), minLamportClock, 50);
-        }
-    }
-
     public static void handleFetchMessageRequest(FetchMessageRequestPayload request){
         Peer senderPeer = Cache.getInstance().getPeer(request.getSenderId());
         if(senderPeer == null || (!request.verify(senderPeer.getPublicKey()))){
             return;
         }
-        Conversation conversation = Cache.getInstance().getConversation(senderPeer.getId());
-        if(conversation == null){
-            return;
-        }
         boolean isDirectChat = request.getConversationId().equals(Cache.getInstance().getCredential().getId());
-
+        Conversation conversation;
         if(isDirectChat){
-            // check direct chat id = sender id
-            if(! request.getConversationId().equals(request.getSenderId())){
-                Logger.warn("Invalid fetch message request for direct conversation: sender.peerId and conversation.id not match!");
+            conversation = Cache.getInstance().getConversation(senderPeer.getId());
+            if(conversation == null){
+                Logger.warn("Fetch Message Request for Direct Conversation: null conversation");
                 return;
             }
+
         }else{
             // check if sender in this group
+            conversation = Cache.getInstance().getConversation(request.getConversationId());
+            if(!(conversation instanceof GroupConversation)){
+                Logger.warn("Invalid fetch message request for group conversation: conversation is not instance of Group Conversation");
+                return;
+            }
             GroupConversation groupConversation = (GroupConversation) (conversation);
             if(groupConversation.getParticipant(request.getSenderId()) == null){
                 Logger.warn("Invalid fetch message request for group conversation: sender do not in this group!");
@@ -288,35 +339,31 @@ public class SyncService {
         }
 
         boolean isDirectChat = response.getConversationId().equals(Cache.getInstance().getCredential().getId());
-
+        Conversation conversation;
         if(isDirectChat){
-            Conversation conv = Cache.getInstance().getConversation(response.getSenderId());
-            if(response.getMessages().isEmpty()){
-                return;
-            }
+            conversation = Cache.getInstance().getConversation(response.getSenderId());
             Logger.debug("Get sync direct chat from: " + response.getSenderId() +" num of message = " + response.getMessages().size());
-            for(var message:response.getMessages()){
-                conv.onReceiveMessage(message);
-            }
-            Message firstMessage = conv.getSuccessMessage().getFirst();
-            if(firstMessage != null && firstMessage.getLamportClock() > 1){
-                requestFetchMessageDirectConversation(conv.getId(), firstMessage.getLamportClock(), 50);
-            }
         }
         else {
-//            Logger.warn("Chua code sync group");
-            Conversation conv = Cache.getInstance().getConversation(response.getSenderId());
-            if(response.getMessages().isEmpty()){
+            conversation = Cache.getInstance().getConversation(response.getConversationId());
+            if(!(conversation instanceof GroupConversation)){
                 return;
             }
             Logger.debug("Get sync group chat from: " + response.getSenderId() +" num of message = " + response.getMessages().size());
-            for(var message:response.getMessages()){
-                conv.onReceiveMessage(message);
-            }
-            Message firstMessage = conv.getSuccessMessage().getFirst();
-            if(firstMessage != null && firstMessage.getLamportClock() > 1){
-                requestFetchMessageDirectConversation(conv.getId(), firstMessage.getLamportClock(), 50);
-            }
+        }
+
+        // update
+        if(response.getMessages().isEmpty()){
+            return;
+        }
+        for(var message:response.getMessages()){
+            conversation.onReceiveMessage(message);
+        }
+
+        // try fetch more message if possible
+        Message firstMessage = conversation.getSuccessMessage().getFirst();
+        if(firstMessage != null && firstMessage.getLamportClock() > 1){
+            requestFetchMessageDirectConversation(conversation.getId(), firstMessage.getLamportClock(), 50);
         }
     }
 }
