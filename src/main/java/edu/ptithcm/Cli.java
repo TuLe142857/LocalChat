@@ -150,7 +150,7 @@ public class Cli {
             }
             invitedPeer.add(p);
         }
-        ChatService.createGroupConversation(name, invitedPeer);
+//        ChatService.createGroupConversation(name, invitedPeer);
     }
 
     static void help(String []args){

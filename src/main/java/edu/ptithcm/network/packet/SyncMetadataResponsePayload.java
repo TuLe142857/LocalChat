@@ -1,8 +1,10 @@
 package edu.ptithcm.network.packet;
 
+import edu.ptithcm.model.GroupConversation;
 import edu.ptithcm.model.Peer;
 import edu.ptithcm.security.Signable;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class SyncMetadataResponsePayload implements Signable {
@@ -17,6 +19,10 @@ public class SyncMetadataResponsePayload implements Signable {
             this.groupName = groupName;
             this.clock = clock;
             this.participants = participants;
+        }
+
+        public static GroupConversationInfo getFrom(GroupConversation g){
+            return new GroupConversationInfo(g.getId(), g.getName(), g.getLamportClock(), g.getParticipantList());
         }
 
         public String getGroupId() {
@@ -47,6 +53,14 @@ public class SyncMetadataResponsePayload implements Signable {
         this.senderId = senderId;
         this.directChatClock = directChatClock;
         this.groupConversationInfoList = groupConversationInfoList;
+        this.timestamp = System.currentTimeMillis();
+    }
+
+    public SyncMetadataResponsePayload(String senderId, long directChatClock, GroupConversationInfo gInfo) {
+        this.senderId = senderId;
+        this.directChatClock = directChatClock;
+        this.groupConversationInfoList = new ArrayList<>();
+        this.groupConversationInfoList.add(gInfo);
         this.timestamp = System.currentTimeMillis();
     }
 

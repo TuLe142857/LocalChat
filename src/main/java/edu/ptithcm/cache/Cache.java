@@ -19,8 +19,7 @@ public class Cache {
     // chat cache
     private final ConcurrentHashMap<String, Peer> knownPeers;
     private final ConcurrentHashMap<String, Conversation> conversations;
-
-    private final ConcurrentHashMap<String, List<String>> pendingInviteGroupMember;
+    private final ConcurrentHashMap<String, Set<String>> pendingInviteGroupMember;
 
     private Cache(){
         knownPeers = new ConcurrentHashMap<>();
@@ -69,11 +68,11 @@ public class Cache {
     }
 
     public void addPeer(Peer peer){
-        this.knownPeers.put(peer.getId(), peer);
+        this.knownPeers.putIfAbsent(peer.getId(), peer);
     }
 
     public void addConversation(Conversation conversation){
-        this.conversations.put(conversation.getId(), conversation);
+        this.conversations.putIfAbsent(conversation.getId(), conversation);
     }
 
     public Peer getPeer(String id){
@@ -88,4 +87,29 @@ public class Cache {
     public List<Conversation> getConversationList(){
         return new ArrayList<>(this.conversations.values());
     }
+
+    public void addPendingGroupInvite(String groupId, String peerId){
+        this.pendingInviteGroupMember.computeIfAbsent(
+                groupId, k->ConcurrentHashMap.newKeySet()
+        ).add(peerId);
+    }
+
+    public Set<String> getPendingGroupInvite(String groupId) {
+        return pendingInviteGroupMember.get(groupId);
+    }
+
+    public boolean removePendingGroupInvite(String groupId, String peerId) {
+        Set<String> set = pendingInviteGroupMember.get(groupId);
+        if (set == null){
+            return false;
+        }
+
+        boolean removed = set.remove(peerId);
+
+        if (set.isEmpty()) {
+            pendingInviteGroupMember.remove(groupId, set);
+        }
+        return removed;
+    }
+
 }

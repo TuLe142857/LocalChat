@@ -16,7 +16,21 @@ public class GroupInviteAckPayload implements Signable {
         this.timestamp = System.currentTimeMillis();
     }
 
-    // ... Getters ...
+    public String getSenderId() {
+        return senderId;
+    }
+
+    public String getGroupId() {
+        return groupId;
+    }
+
+    public boolean isAccept() {
+        return accept;
+    }
+
+    public long getTimestamp() {
+        return timestamp;
+    }
 
     @Override
     public String getSignableData() {
@@ -25,11 +39,11 @@ public class GroupInviteAckPayload implements Signable {
 
     @Override
     public String getSignature() {
-        return "";
+        return signature;
     }
 
     @Override
     public void setSignature(String signature) {
-
+        this.signature = signature;
     }
 }

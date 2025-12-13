@@ -27,7 +27,7 @@ public abstract class Conversation {
     }
 
     /**
-     * Tạo tin nhắn gởi đi
+     * Tạo tin nhắn gởi đi(đã xử lý lamport clock + chữ ký số)
      * @param content
      * @return
      */
@@ -40,6 +40,7 @@ public abstract class Conversation {
                 this.lamportClock
         );
         message.setStatus(Message.MessageStatus.PENDING);
+        message.sign(Cache.getInstance().getCredential().getPrivateKey());
         this.messages.add(message);
         return message;
     }

@@ -9,9 +9,12 @@ import edu.ptithcm.cache.Cache;
 import edu.ptithcm.model.*;
 import edu.ptithcm.network.core.ConnectionPool;
 import edu.ptithcm.network.core.PeerConnection;
-import edu.ptithcm.network.packet.NetworkPacket;
+import edu.ptithcm.network.packet.*;
 import edu.ptithcm.util.JsonUtils;
+import edu.ptithcm.util.LogConfig;
+import org.tinylog.Logger;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -58,15 +61,192 @@ public class ChatService {
 
     /**
      * Tạo và mời các thành viên vào nhóm
-     *
+     * Mặc định sẽ tự add bản thân vào nhóm, không cần include trong selected Peer
+     * Trả về GroupConversation
+     * Group đã được thêm vào cache trong hàm này, không cần thêm thủ công
+     * sle
      * @param groupName
      */
-    public static void createGroupConversation(String groupName, List<Peer> selectedPeer){
-        // new group
-        // send invite
-        // add to queue
+    public static GroupConversation createGroupConversation(String groupName, List<String> selectedPeerId){
+        GroupConversation groupConversation = new GroupConversation(groupName);
+        groupConversation.addParticipants(Cache.getInstance().getMyPeer());
 
+        // add cache
+        Cache.getInstance().addConversation(groupConversation);
+
+        // send invite
+        for(String peerId : selectedPeerId){
+            invitePeerToGroup(groupConversation.getId(), peerId);
+        }
+
+        return groupConversation;
     }
+
+    public static void invitePeerToGroup(String groupId, String peerId){
+        Conversation conversation = Cache.getInstance().getConversation(groupId);
+        Peer targetPeer = Cache.getInstance().getPeer(peerId);
+
+        if(conversation == null || targetPeer == null){
+            Logger.error("Invite peer to group failed: group or peer is null");
+            return;
+        }
+
+        if(!(conversation instanceof GroupConversation)){
+            Logger.error("Invite peer to group failed: group is not instance of GroupConversation");
+            return;
+        }
+
+        // add to invited list
+        Cache.getInstance().addPendingGroupInvite(groupId, peerId);
+
+
+        GroupConversation groupConversation = (GroupConversation)(conversation);
+        GroupInvitePayload payload = new GroupInvitePayload(Cache.getInstance().getCredential().getId(), groupId, groupConversation.getName());
+        payload.sign(Cache.getInstance().getCredential().getPrivateKey());
+        NetworkPacket networkPacket = new NetworkPacket(NetworkPacket.PacketType.GROUP_INVITE, JsonUtils.toJson(payload));
+
+        // send invite
+        ConnectionPool.getInstance().getOrConnect(targetPeer)
+            .thenAccept(
+                peerConnection -> {
+                    try {
+                        peerConnection.sendNetworkPacket(networkPacket);
+                    }catch (IOException e){
+                        Logger.error("Error send GROUP INVITE: connection error");
+                    }
+                }
+            );
+    }
+
+    /**
+     * Xử lý nhận lời mời join group: auto accept + gởi ack reply
+     */
+    public static void handleGroupInvite(GroupInvitePayload invitePayload){
+        Peer senderPeer = Cache.getInstance().getPeer(invitePayload.getSenderId());
+        if(senderPeer == null || (!invitePayload.verify(senderPeer.getPublicKey()))){
+            Logger.warn("Handle GroupInvite got null senderPeer or invalid signature");
+            return;
+        }
+
+        // tạo group nhưng chưa add vào cache
+        GroupConversation groupConversation = new GroupConversation(invitePayload.getGroupName(), invitePayload.getGroupId());
+        groupConversation.addParticipants(senderPeer);
+        groupConversation.addParticipants(Cache.getInstance().getMyPeer());
+
+        GroupInviteAckPayload responsePayload = new GroupInviteAckPayload(groupConversation.getId(), Cache.getInstance().getCredential().getId(), true);
+        responsePayload.sign(Cache.getInstance().getCredential().getPrivateKey());
+
+        NetworkPacket networkPacket = new NetworkPacket(NetworkPacket.PacketType.GROUP_INVITE_ACK, JsonUtils.toJson(responsePayload));
+        ConnectionPool.getInstance().getOrConnect(senderPeer)
+                .thenAccept(
+                        peerConnection -> {
+                            try{
+                                peerConnection.sendNetworkPacket(networkPacket);
+
+                                // Chỉ add group vào cache khi gởi gói tin ack success
+                                Cache.getInstance().addConversation(groupConversation);
+                            }catch (IOException e){
+                                Logger.error("Error send GROUP INVITE ACK: connection error");
+                            }
+                        }
+                );
+    }
+
+    /**
+     * Nhận phản hồi đồng ý join group từ peer khác (mình là người mời)
+     * @param inviteAckPayload
+     */
+    public static void handleGroupInviteAck(GroupInviteAckPayload inviteAckPayload){
+        if(!Cache.getInstance().getPendingGroupInvite(inviteAckPayload.getGroupId()).contains(inviteAckPayload.getSenderId())){
+            Logger.warn("Handle GroupInviteAck: senderId was not invited to this group");
+            return;
+        }
+        Peer senderPeer = Cache.getInstance().getPeer(inviteAckPayload.getSenderId());
+        if(senderPeer == null || (!inviteAckPayload.verify(senderPeer.getPublicKey()))){
+            Logger.warn("Handle GroupInviteAck got null senderPeer or invalid signature");
+            return;
+        }
+
+        Conversation conversation = Cache.getInstance().getConversation(inviteAckPayload.getGroupId());
+        if(!(conversation instanceof GroupConversation)){
+            return;
+        }
+
+        // thêm vào nhóm
+        GroupConversation groupConversation = (GroupConversation) (conversation);
+        groupConversation.addParticipants(senderPeer);
+
+        // remove from pending invite
+        Cache.getInstance().removePendingGroupInvite(groupConversation.getId(), senderPeer.getId());
+
+        // Gởi gói tin update tới các thành viên khác trong nhóm
+        GroupUpdatePayload updatePayload = new GroupUpdatePayload(
+                Cache.getInstance().getCredential().getId(),
+                groupConversation.getId(),
+                GroupUpdatePayload.Action.ADD_MEMBER,
+                senderPeer
+        );
+        updatePayload.sign(Cache.getInstance().getCredential().getPrivateKey());
+        NetworkPacket networkPacket = new NetworkPacket(NetworkPacket.PacketType.GROUP_UPDATE, JsonUtils.toJson(updatePayload));
+        for(Peer participant : groupConversation.getParticipantList()){
+            ConnectionPool.getInstance().getOrConnect(participant)
+                .thenAccept(
+                    peerConnection -> {
+                        try {
+                            peerConnection.sendNetworkPacket(networkPacket);
+                        } catch (IOException e) {
+                            Logger.error("Send group update failed: connection error");
+                        }
+                    }
+                );
+        }
+
+        // sync group cho thành viên mới
+        SyncMetadataResponsePayload syncPayload = new SyncMetadataResponsePayload(
+                Cache.getInstance().getCredential().getId(),0,
+                SyncMetadataResponsePayload.GroupConversationInfo.getFrom(groupConversation)
+        );
+        syncPayload.verify(Cache.getInstance().getCredential().getPublicKey());
+        NetworkPacket syncPacket = new NetworkPacket(NetworkPacket.PacketType.SYNC_METADATA_RESPONSE, JsonUtils.toJson(syncPayload));
+        ConnectionPool.getInstance().getOrConnect(senderPeer)
+                .thenAccept(
+                        peerConnection -> {
+                            try {
+                                peerConnection.sendNetworkPacket(syncPacket);
+                            } catch (IOException e) {
+                                Logger.error("Send sync metadata to new member of group failed: connection error");
+                            }
+                        }
+                );
+    }
+
+    public static void handleGroupUpdatePayload(GroupUpdatePayload groupUpdatePayload){
+        Peer senderPeer = Cache.getInstance().getPeer(groupUpdatePayload.getSenderId());
+        Conversation conversation = Cache.getInstance().getConversation(groupUpdatePayload.getGroupId());
+
+        if (senderPeer==null || (!(conversation instanceof GroupConversation)) || (groupUpdatePayload.verify(senderPeer.getPublicKey()))){
+            Logger.warn("GroupUpdatePayload verify failed");
+            return;
+        }
+
+        GroupConversation groupConversation = (GroupConversation) (conversation);
+        if(groupUpdatePayload.getAction() == GroupUpdatePayload.Action.LEAVE_GROUP){
+            if(groupUpdatePayload.getSenderId().equals(groupUpdatePayload.getTargetPeer().getId())){
+                groupConversation.removeParticipant(groupUpdatePayload.getSenderId());
+            }
+        }else if(groupUpdatePayload.getAction() == GroupUpdatePayload.Action.ADD_MEMBER){
+            // lấy peer trong cache để đảm bảo đúng tham chiếu
+            Peer cachedPeer = Cache.getInstance().getPeer(groupUpdatePayload.getTargetPeer().getId());
+
+            // unknown new peer
+            if(cachedPeer == null){
+                Cache.getInstance().addPeer(groupUpdatePayload.getTargetPeer());
+                cachedPeer = groupUpdatePayload.getTargetPeer();
+            }
+            groupConversation.addParticipants(cachedPeer);
+        }
+    }
+
 
 
 

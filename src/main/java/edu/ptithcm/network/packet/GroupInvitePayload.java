@@ -14,11 +14,11 @@ public class GroupInvitePayload implements Signable {
     private final long timestamp;
     private String signature;
 
-    public GroupInvitePayload(String senderId, String groupId, String groupName, long timestamp) {
+    public GroupInvitePayload(String senderId, String groupId, String groupName) {
         this.senderId = senderId;
         this.groupId = groupId;
         this.groupName = groupName;
-        this.timestamp = timestamp;
+        this.timestamp = System.currentTimeMillis();
     }
 
     public String getSenderId() {
@@ -39,16 +39,16 @@ public class GroupInvitePayload implements Signable {
 
     @Override
     public String getSignableData() {
-        return "";
+        return senderId + groupId + groupName + timestamp;
     }
 
     @Override
     public String getSignature() {
-        return "";
+        return signature;
     }
 
     @Override
     public void setSignature(String signature) {
-
+        this.signature = signature;
     }
 }

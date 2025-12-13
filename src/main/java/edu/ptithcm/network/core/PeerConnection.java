@@ -8,6 +8,7 @@ import edu.ptithcm.model.Message;
 import edu.ptithcm.network.packet.*;
 import edu.ptithcm.model.Peer;
 import edu.ptithcm.security.CryptoUtils;
+import edu.ptithcm.service.ChatService;
 import edu.ptithcm.service.SyncService;
 import edu.ptithcm.util.JsonUtils;
 import org.tinylog.Logger;
@@ -121,6 +122,15 @@ public class PeerConnection {
                 }
                 else if(networkPacket.getPacketType() == NetworkPacket.PacketType.FETCH_MESSAGE_RESPONSE){
                     SyncService.handleFetchMessageResponse(networkPacket.getPayloadAs(FetchMessageResponsePayload.class));
+                }
+                else if(networkPacket.getPacketType() == NetworkPacket.PacketType.GROUP_INVITE){
+                    ChatService.handleGroupInvite(networkPacket.getPayloadAs(GroupInvitePayload.class));
+                }
+                else if(networkPacket.getPacketType() == NetworkPacket.PacketType.GROUP_INVITE_ACK){
+                    ChatService.handleGroupInviteAck(networkPacket.getPayloadAs(GroupInviteAckPayload.class));
+                }
+                else if(networkPacket.getPacketType() == NetworkPacket.PacketType.GROUP_UPDATE){
+                    ChatService.handleGroupUpdatePayload(networkPacket.getPayloadAs(GroupUpdatePayload.class));
                 }
                 else{
                     Logger.warn("Unexpected NetworkPacket type to PeerConnection " + peer.getId() +" : " + networkPacket.getPacketType());

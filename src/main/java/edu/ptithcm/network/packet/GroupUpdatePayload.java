@@ -12,14 +12,13 @@ import edu.ptithcm.security.Signable;
 public class GroupUpdatePayload implements Signable {
     public enum Action {
         ADD_MEMBER,
-        REMOVE_MEMBER,
-        CHANGE_OWNER
+        LEAVE_GROUP,
     }
 
     private final String senderId;
     private final String groupId;
     private final Action action;
-    private final Peer targetPeer; // Đối tượng bị tác động (người mới, người bị kick, hoặc owner mới)
+    private final Peer targetPeer; // Đối tượng bị tác động (người mới, người leave(senderid == targetPeer.id))
     private final long timestamp;
     private String signature;
 
@@ -58,11 +57,11 @@ public class GroupUpdatePayload implements Signable {
 
     @Override
     public String getSignature() {
-        return "";
+        return signature;
     }
 
     @Override
     public void setSignature(String signature) {
-
+        this.signature = signature;
     }
 }
