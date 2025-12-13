@@ -16,12 +16,12 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.control.ScrollPane; // NEW IMPORT
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.VBox; // NEW IMPORT
+import javafx.scene.layout.VBox;
 import org.tinylog.Logger;
 
 import java.util.concurrent.Executors;
@@ -33,13 +33,12 @@ public class ChatBoxView extends BaseView {
     private Conversation activeConversation;
     private Label conversationNameLabel;
     private Button addMemberButton;
-    // Thay thế TextArea messageArea
     private ScrollPane messageScrollPane;
     private VBox messageContainer;
     private TextField inputField;
     private Runnable unsubscribeReceiver;
     private Runnable unsubscribeSuccess;
-    // Đã có executor trong init, không cần khai báo lại
+
 
     private static final String STYLE_HEADER = "-fx-background-color: #e8eaf6; -fx-border-color: #ccc; -fx-border-width: 0 0 1 0;";
     private static final String STYLE_AREA = "-fx-control-inner-background:#fff; -fx-font-family: 'Segoe UI'; -fx-font-size: 14px; -fx-background-color: #f5f5f5;";
@@ -130,7 +129,7 @@ public class ChatBoxView extends BaseView {
         // 1. Tạo Message và thêm vào Conversation (cập nhật Lamport Clock)
         Message message = activeConversation.createMessage(content);
 
-        // 2. Cập nhật UI ngay lập tức
+        // 2. Cập nhật UI ngay lập lập
         inputField.clear();
         updateMessageArea();
 
@@ -166,7 +165,7 @@ public class ChatBoxView extends BaseView {
                 statusInfoLabel.setStyle("-fx-font-size: 0.8em; -fx-text-fill: #888;");
 
                 if (isMe) {
-                    // Tin nhắn của tôi: [Nội dung] [Trạng thái]
+                    // Tin nhắn của tôi: [Trạng thái]
                     statusInfoLabel.setText(statusMarker); // Chỉ hiển thị trạng thái
                     contentLabel.setStyle(STYLE_BUBBLE_ME);
                 } else {
@@ -178,7 +177,17 @@ public class ChatBoxView extends BaseView {
 
                 // 3. Xây dựng Bong bóng chat (Bubble)
                 VBox bubble = new VBox(2); // VBox chứa trạng thái/tên và nội dung
-                bubble.getChildren().addAll(statusInfoLabel, contentLabel);
+
+                if(isMe){
+                    // Tin nhắn của tôi: [Nội dung] và [Trạng thái] nằm dưới
+                    bubble.setAlignment(Pos.CENTER_RIGHT);
+                    bubble.getChildren().addAll(contentLabel, statusInfoLabel);
+                } else {
+                    // Tin nhắn của người khác: [Tên] và [Nội dung]
+                    bubble.setAlignment(Pos.CENTER_LEFT);
+                    bubble.getChildren().addAll(statusInfoLabel, contentLabel);
+                }
+
                 bubble.setPadding(new Insets(0, 5, 0, 5)); // Spacing quanh bubble
 
                 // 4. Căn lề Bubble bằng HBox

@@ -102,9 +102,8 @@ public class ChatListView extends BaseView {
         this.unsubscribeRunnable = MessageBus.subscribe(MessageReceivedEvent.class, this::handleMessageReceived);
     }
 
-    // FIX LỖI: Mất chọn và không cập nhật sau khi loadData()
+    // FIX LỖI: Mất chọn (highlight) và không kích hoạt update tin nhắn
     private void handleMessageReceived(MessageReceivedEvent event) {
-        // 1. Lấy ID của người gửi (chính là ID của Direct Conversation trên Host nhận)
         final String senderId = event.getMessage().getSenderId();
 
         Platform.runLater(() -> {
@@ -114,26 +113,24 @@ public class ChatListView extends BaseView {
             // Cờ kiểm tra xem cuộc trò chuyện đang nhận tin nhắn có đang được xem hay không.
             boolean isTargetCurrentlySelected = senderId.equals(currentConvId);
 
-            // BƯỚC 1: Nếu Conversation đang được chọn là Conversation nhận tin nhắn,
-            // ta phải BẮT BUỘC xóa selection để thao tác select() sau đó kích hoạt Listener.
-            if (isTargetCurrentlySelected) {
-                conversationListView.getSelectionModel().clearSelection();
-            }
-
-            // BƯỚC 2: Tải lại dữ liệu (loadData()): Đảm bảo tin nhắn mới lên đầu
+            // 1. Tải lại dữ liệu (loadData()):
             loadData();
 
-            // BƯỚC 3: Tìm Conversation mới sau khi loadData
+            // 2. Tìm Conversation mới sau khi loadData
             Conversation convToSelect = conversations.stream()
                     .filter(c -> c.getId().equals(senderId))
                     .findFirst()
                     .orElse(null);
 
             if (convToSelect != null) {
-                // BƯỚC 4: Re-select.
-                // Thao tác này sẽ đảm bảo:
-                // a) Item đó được tô xanh lại (highlight).
-                // b) Listener selectedItemProperty được kích hoạt -> Cập nhật ChatBoxView.
+                // Nếu Conversation vừa nhận đang được chọn (trước khi reload)
+                if (isTargetCurrentlySelected) {
+                    // **BƯỚC SỬA LỖI QUAN TRỌNG NHẤT:** // Phải clear selection trước khi select lại cùng một đối tượng (hoặc đối tượng mới cùng ID)
+                    // để buộc Listener fired và ListView tô màu lại.
+                    conversationListView.getSelectionModel().clearSelection();
+                }
+
+                // 3. Re-select. Thao tác này kích hoạt Listener -> ChatLayout -> ChatBoxView.setActiveConversation.
                 conversationListView.getSelectionModel().select(convToSelect);
             } else if (currentConvId != null) {
                 // Logic phòng ngừa: nếu không tìm thấy convToSelect, cố gắng chọn lại conv cũ nếu có.
