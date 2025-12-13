@@ -110,7 +110,7 @@ public class Cli {
         }
         while (true){
             printConversationDetail(conversation, true);
-            String content = IO.readln("\nType message to send(or enter to exit): \n>>");
+            String content = IO.readln("\nType message to send(or enter to exit): \n");
             if(content.isEmpty())
                 break;
             Message message = conversation.createMessage(content);
@@ -194,7 +194,7 @@ public class Cli {
         IO.println("Number of pending message: " + c.getPendingMessage().size());
         IO.println("Number of send failed message: " + c.getFailedMessage().size());
         if(showMessageDetail){
-            IO.print("--Message in this conversation--");
+            IO.println("--Message in this conversation--");
             for(var m:c.getSuccessMessage()){
                 if(m.getSenderId().equals(Cache.getInstance().getCredential().getId())){
                     IO.println("You: " +m.getContent());
@@ -203,7 +203,7 @@ public class Cli {
                     IO.println(Cache.getInstance().getPeer(m.getSenderId()).getName() + ": " + m.getContent());
                 }
             }
-            IO.print("--------------------------------");
+            IO.println("--------------------------------");
         }
 
 
