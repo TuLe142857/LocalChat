@@ -86,15 +86,15 @@ public class ChatListView extends BaseView {
 
     @Override
     public void loadData() {
-        Platform.runLater(() -> {
-            conversations.clear();
-            List<Conversation> convList = Cache.getInstance().getConversationList();
+        // [FIX]: Bỏ Platform.runLater ở đây để cho handleMessageReceived kiểm soát việc gọi
+        // đảm bảo loadData chạy đồng bộ với các lệnh clear/select
+        conversations.clear();
+        List<Conversation> convList = Cache.getInstance().getConversationList();
 
-            // Sắp xếp theo Lamport Clock (Conversation có tin nhắn mới nhất sẽ lên đầu)
-            convList.sort(Comparator.comparing(Conversation::getLamportClock).reversed());
+        // Sắp xếp theo Lamport Clock (Conversation có tin nhắn mới nhất sẽ lên đầu)
+        convList.sort(Comparator.comparing(Conversation::getLamportClock).reversed());
 
-            conversations.addAll(convList);
-        });
+        conversations.addAll(convList);
     }
 
     @Override public void setupEventBus() {
