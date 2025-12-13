@@ -75,6 +75,10 @@ public class Cache {
         this.conversations.putIfAbsent(conversation.getId(), conversation);
     }
 
+    public boolean removeConversation(String id){
+        return this.conversations.remove(id) != null;
+    }
+
     public Peer getPeer(String id){
         return this.knownPeers.get(id);
     }

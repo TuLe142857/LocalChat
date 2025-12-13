@@ -53,11 +53,67 @@ public class ChatService {
 
     }
 
-    /*==========================
-            GROUP CHAT
-     ============================ */
+    /*====================================================================
+                    SEND MESSAGE (DIRECT & GROUP CONVERSATION)
+     ====================================================================*/
+    /**
+     * Bắt buộc phải tồn tại conversation, nếu không thì hàm này không tự tạo
+     * @param message
+     */
+    public static void sendMessage(Message message){
+        Conversation conversation = Cache.getInstance().getConversation(message.getConversationId());
+        if(conversation == null)
+            return;
+        if (conversation instanceof DirectConversation){
+            DirectConversation dConversation = (DirectConversation)(conversation);
+            Peer targetPeer = dConversation.getPartner();
+            ConnectionPool.getInstance().getOrConnect(targetPeer)
+                    .thenAccept(peerConnection -> {
+                        NetworkPacket networkPacket = new NetworkPacket(NetworkPacket.PacketType.MESSAGE, JsonUtils.toJson(message));
+                        try{
+                            peerConnection.sendNetworkPacket(networkPacket);
+                        }catch (Exception e){
+                            MessageBus.emit(new MessageSendFailedEvent(message.getId(), message.getConversationId()));
+                        }
+                    })
+                    .exceptionally(
+                            t ->{
+                                MessageBus.emit(new MessageSendFailedEvent(message.getId(), message.getConversationId()));
+                                return  null;
+                            }
+                    );
+        }else if(conversation instanceof GroupConversation){
+            GroupConversation gConversation = (GroupConversation)(conversation);
+            NetworkPacket networkPacket = new NetworkPacket(NetworkPacket.PacketType.MESSAGE, JsonUtils.toJson(message));
+            for(Peer targetPeer: gConversation.getParticipantList()){
 
-    //CREATE
+                // bỏ qua bản thân
+                if (targetPeer.getId().equals(Cache.getInstance().getCredential().getId())) continue;
+
+                ConnectionPool.getInstance().getOrConnect(targetPeer)
+                        .thenAccept(
+                                peerConnection -> {
+                                    try{
+                                        peerConnection.sendNetworkPacket(networkPacket);
+//                                        allSendFailed = false;
+                                    }catch (Exception e){
+//                                        MessageBus.emit(new MessageSendFailedEvent(message.getId(), message.getConversationId()));
+                                    }
+                                }
+                        )
+                        .exceptionally(
+                                t->{
+//                                    MessageBus.emit(new MessageSendFailedEvent(message.getId(), message.getConversationId()));
+                                    return  null;
+                                }
+                        );
+            }
+        }
+    }
+
+    /*====================================================================
+                            GROUP CONVERSATION
+     ====================================================================*/
 
     /**
      * Tạo và mời các thành viên vào nhóm
@@ -82,6 +138,11 @@ public class ChatService {
         return groupConversation;
     }
 
+    /**
+     * Mời thành viên mới vào nhóm
+     * @param groupId
+     * @param peerId
+     */
     public static void invitePeerToGroup(String groupId, String peerId){
         Conversation conversation = Cache.getInstance().getConversation(groupId);
         Peer targetPeer = Cache.getInstance().getPeer(peerId);
@@ -117,6 +178,48 @@ public class ChatService {
                 }
             );
     }
+
+    /**
+     * Rời nhóm mà bản thân đang tham gia
+     */
+    public static void leaveGroup(String groupId){
+        Conversation conversation = Cache.getInstance().getConversation(groupId);
+        if(!(conversation instanceof GroupConversation)){
+            Logger.error("Leave group error: group is null or not instance of GroupConversation");
+            return;
+        }
+
+        GroupUpdatePayload payload = new GroupUpdatePayload(
+                Cache.getInstance().getCredential().getId(),
+                groupId,
+                GroupUpdatePayload.Action.LEAVE_GROUP,
+                Cache.getInstance().getMyPeer()
+        );
+        payload.sign(Cache.getInstance().getCredential().getPrivateKey());
+        NetworkPacket packet = new NetworkPacket(NetworkPacket.PacketType.GROUP_UPDATE, JsonUtils.toJson(payload));
+
+        GroupConversation group = (GroupConversation) (conversation);
+        for(Peer p : group.getParticipantList()){
+            ConnectionPool.getInstance().getOrConnect(p)
+            .thenAccept(
+                    peerConnection -> {
+                        try {
+                            peerConnection.sendNetworkPacket(packet);
+                        } catch (IOException e) {
+                            Logger.error("Send group leave failed: connection error");
+                        }
+                    }
+                );
+        }
+
+//        group.removeParticipant(Cache.getInstance().getCredential().getId());
+        Cache.getInstance().removeConversation(group.getId());
+    }
+
+    /*====================================================================
+     THE FOLLOWING METHOD IS FOR NETWORK LAYER ONLY(class PeerConnection.listen())
+     DO NOT CALL/HANDLE IN UI THREAD
+     ====================================================================*/
 
     /**
      * Xử lý nhận lời mời join group: auto accept + gởi ack reply
@@ -248,64 +351,7 @@ public class ChatService {
     }
 
 
-
-
-    /**
-     * Bắt buộc phải tồn tại conversation, nếu không thì hàm này không tự tạo
-     * @param message
-     */
-    private static void sendMessage(Message message){
-        Conversation conversation = Cache.getInstance().getConversation(message.getConversationId());
-        if(conversation == null)
-            return;
-        if (conversation instanceof DirectConversation){
-            DirectConversation dConversation = (DirectConversation)(conversation);
-            Peer targetPeer = dConversation.getPartner();
-            ConnectionPool.getInstance().getOrConnect(targetPeer)
-                    .thenAccept(peerConnection -> {
-                        NetworkPacket networkPacket = new NetworkPacket(NetworkPacket.PacketType.MESSAGE, JsonUtils.toJson(message));
-                        try{
-                            peerConnection.sendNetworkPacket(networkPacket);
-                        }catch (Exception e){
-                            MessageBus.emit(new MessageSendFailedEvent(message.getId(), message.getConversationId()));
-                        }
-                    })
-                    .exceptionally(
-                            t ->{
-                                MessageBus.emit(new MessageSendFailedEvent(message.getId(), message.getConversationId()));
-                                return  null;
-                            }
-                    );
-        }else if(conversation instanceof GroupConversation){
-            GroupConversation gConversation = (GroupConversation)(conversation);
-            NetworkPacket networkPacket = new NetworkPacket(NetworkPacket.PacketType.MESSAGE, JsonUtils.toJson(message));
-            for(Peer targetPeer: gConversation.getParticipantList()){
-
-                // bỏ qua bản thân
-                if (targetPeer.getId().equals(Cache.getInstance().getCredential().getId())) continue;
-
-                ConnectionPool.getInstance().getOrConnect(targetPeer)
-                        .thenAccept(
-                                peerConnection -> {
-                                    try{
-                                        peerConnection.sendNetworkPacket(networkPacket);
-//                                        allSendFailed = false;
-                                    }catch (Exception e){
-//                                        MessageBus.emit(new MessageSendFailedEvent(message.getId(), message.getConversationId()));
-                                    }
-                                }
-                        )
-                        .exceptionally(
-                                t->{
-//                                    MessageBus.emit(new MessageSendFailedEvent(message.getId(), message.getConversationId()));
-                                    return  null;
-                                }
-                        );
-            }
-        }
-    }
-
-    private static void onReceiveMessage(Message message){
+    public static void onReceiveMessage(Message message){
         boolean isDirectChatMessage = message.getConversationId().equals(Cache.getInstance().getCredential().getId());
         String conversationId = isDirectChatMessage
                                 ? (message.getSenderId())
@@ -326,7 +372,7 @@ public class ChatService {
         conversation.onReceiveMessage(message);
     }
 
-    private static void onSendSuccessMessage(String messageId, String conversationId){
+    public static void onSendSuccessMessage(String messageId, String conversationId){
         Conversation conversation = Cache.getInstance().getConversation(conversationId);
         if(conversation == null)
             return;
