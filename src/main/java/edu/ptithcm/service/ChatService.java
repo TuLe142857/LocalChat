@@ -200,6 +200,9 @@ public class ChatService {
 
         GroupConversation group = (GroupConversation) (conversation);
         for(Peer p : group.getParticipantList()){
+            // skip self peer
+            if(p.getId().equals(Cache.getInstance().getCredential().getId()))
+                continue;
             ConnectionPool.getInstance().getOrConnect(p)
             .thenAccept(
                     peerConnection -> {
@@ -292,6 +295,9 @@ public class ChatService {
         updatePayload.sign(Cache.getInstance().getCredential().getPrivateKey());
         NetworkPacket networkPacket = new NetworkPacket(NetworkPacket.PacketType.GROUP_UPDATE, JsonUtils.toJson(updatePayload));
         for(Peer participant : groupConversation.getParticipantList()){
+            // skip self peer
+            if(participant.getId().equals(Cache.getInstance().getCredential().getId()))
+                continue;
             ConnectionPool.getInstance().getOrConnect(participant)
                 .thenAccept(
                     peerConnection -> {
