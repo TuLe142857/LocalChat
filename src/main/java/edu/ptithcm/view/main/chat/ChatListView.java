@@ -104,6 +104,7 @@ public class ChatListView extends BaseView {
 
     // FIX LỖI: Mất chọn và không cập nhật sau khi loadData()
     private void handleMessageReceived(MessageReceivedEvent event) {
+        // 1. Lấy ID của người gửi (chính là ID của Direct Conversation trên Host nhận)
         final String senderId = event.getMessage().getSenderId();
 
         Platform.runLater(() -> {
@@ -115,7 +116,6 @@ public class ChatListView extends BaseView {
 
             // BƯỚC 1: Nếu Conversation đang được chọn là Conversation nhận tin nhắn,
             // ta phải BẮT BUỘC xóa selection để thao tác select() sau đó kích hoạt Listener.
-            // Điều này giải quyết vấn đề mất tô màu xanh và không kích hoạt updateMessageArea()
             if (isTargetCurrentlySelected) {
                 conversationListView.getSelectionModel().clearSelection();
             }
@@ -132,9 +132,8 @@ public class ChatListView extends BaseView {
             if (convToSelect != null) {
                 // BƯỚC 4: Re-select.
                 // Thao tác này sẽ đảm bảo:
-                // a) Item đó được tô xanh lại (isSelected() = true).
-                // b) Listener selectedItemProperty thay đổi (vì đã clear hoặc object reference mới)
-                //    -> Kích hoạt onConversationSelected -> ChatBoxView.setActiveConversation -> updateMessageArea().
+                // a) Item đó được tô xanh lại (highlight).
+                // b) Listener selectedItemProperty được kích hoạt -> Cập nhật ChatBoxView.
                 conversationListView.getSelectionModel().select(convToSelect);
             } else if (currentConvId != null) {
                 // Logic phòng ngừa: nếu không tìm thấy convToSelect, cố gắng chọn lại conv cũ nếu có.
@@ -186,6 +185,7 @@ public class ChatListView extends BaseView {
                 setPadding(new Insets(10));
 
                 if (isSelected()) {
+                    // Tô màu xanh cho item đang được chọn
                     setStyle("-fx-border-color: #f0f0f0; -fx-border-width: 0 0 1 0; -fx-background-color: #bbdefb;");
                 } else {
                     setStyle("-fx-border-color: #f0f0f0; -fx-border-width: 0 0 1 0; -fx-background-color: #fff;");
