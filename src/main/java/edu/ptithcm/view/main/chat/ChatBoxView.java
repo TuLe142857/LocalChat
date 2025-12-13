@@ -209,6 +209,8 @@ public class ChatBoxView extends BaseView {
         });
     }
 
+
+
     // NEW METHOD (Giữ nguyên)
     private void handleMessageSuccess(MessageSendSuccessEvent event) {
         // Chỉ cập nhật UI nếu tin nhắn thuộc Conversation đang mở

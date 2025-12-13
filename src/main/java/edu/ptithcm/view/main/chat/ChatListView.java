@@ -78,7 +78,7 @@ public class ChatListView extends BaseView {
         this.getChildren().add(root);
     }
 
-    // NEW METHOD
+    // NEW METHOD (Giữ nguyên)
     private void handleNewGroupCreated(GroupConversation newGroup) {
         loadData();
         conversationListView.getSelectionModel().select(newGroup);
@@ -90,7 +90,7 @@ public class ChatListView extends BaseView {
             conversations.clear();
             List<Conversation> convList = Cache.getInstance().getConversationList();
 
-            // Sắp xếp theo Lamport Clock
+            // Sắp xếp theo Lamport Clock (Conversation có tin nhắn mới nhất sẽ lên đầu)
             convList.sort(Comparator.comparing(Conversation::getLamportClock).reversed());
 
             conversations.addAll(convList);
@@ -102,10 +102,37 @@ public class ChatListView extends BaseView {
         this.unsubscribeRunnable = MessageBus.subscribe(MessageReceivedEvent.class, this::handleMessageReceived);
     }
 
-    // NEW METHOD
+    // NEW METHOD: Sửa lỗi không cập nhật realtime bằng cách TỰ ĐỘNG CHỌN Conversation
     private void handleMessageReceived(MessageReceivedEvent event) {
-        // Khi có tin nhắn đến, refresh data để Conversation vừa nhận có thể được đưa lên đầu hoặc tạo mới
-        Platform.runLater(this::loadData);
+        // 1. Lấy ID của người gửi (chính là ID của Direct Conversation trên Host nhận)
+        final String senderId = event.getMessage().getSenderId();
+
+        Platform.runLater(() -> {
+            // Lưu lại Conversation đang được chọn (trước khi reload)
+            Conversation currentlySelected = conversationListView.getSelectionModel().getSelectedItem();
+
+            // 2. Tải lại dữ liệu (để Conversation mới xuất hiện hoặc được sắp xếp lên đầu)
+            loadData();
+
+            // 3. Kiểm tra và Tự động chọn Conversation nếu nó không phải là Conversation đang hiển thị
+            boolean alreadyActive = currentlySelected != null && currentlySelected.getId().equals(senderId);
+
+            if (!alreadyActive && !conversations.isEmpty()) {
+                // Do loadData đã sắp xếp theo Lamport Clock, Conversation mới nhất sẽ ở vị trí 0.
+                // Tìm Conversation có ID khớp với senderId
+                Conversation convToSelect = conversations.stream()
+                        .filter(c -> c.getId().equals(senderId))
+                        .findFirst()
+                        .orElse(null);
+
+                if (convToSelect != null) {
+                    // **Kích hoạt selection**
+                    // Việc chọn này sẽ kích hoạt listener (onConversationSelected.accept(newVal))
+                    // và gọi ChatLayout.handleConversationSelected -> ChatBox.setActiveConversation(conv)
+                    conversationListView.getSelectionModel().select(convToSelect);
+                }
+            }
+        });
     }
 
     @Override
