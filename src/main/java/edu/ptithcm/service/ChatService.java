@@ -333,7 +333,7 @@ public class ChatService {
         Peer senderPeer = Cache.getInstance().getPeer(groupUpdatePayload.getSenderId());
         Conversation conversation = Cache.getInstance().getConversation(groupUpdatePayload.getGroupId());
 
-        if (senderPeer==null || (!(conversation instanceof GroupConversation)) || (groupUpdatePayload.verify(senderPeer.getPublicKey()))){
+        if (senderPeer==null || (!(conversation instanceof GroupConversation)) || (!groupUpdatePayload.verify(senderPeer.getPublicKey()))){
             Logger.warn("GroupUpdatePayload verify failed");
             return;
         }
