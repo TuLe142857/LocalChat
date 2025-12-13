@@ -4,6 +4,7 @@ import edu.ptithcm.security.Signable;
 
 /**
  * Thông báo bên kia biết đã nhận được tin nhắn
+ * Gói tin thông quan trọng, không cần xác thực bằng chữ ký số
  */
 public class MessageAckPayload{
     private final String messageId;

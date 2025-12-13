@@ -5,10 +5,10 @@ import edu.ptithcm.bus.event.MessageReceivedEvent;
 import edu.ptithcm.bus.event.MessageSendSuccessEvent;
 import edu.ptithcm.model.Credential;
 import edu.ptithcm.model.Message;
-import edu.ptithcm.network.packet.MessageAckPayload;
-import edu.ptithcm.network.packet.NetworkPacket;
+import edu.ptithcm.network.packet.*;
 import edu.ptithcm.model.Peer;
 import edu.ptithcm.security.CryptoUtils;
+import edu.ptithcm.service.SyncService;
 import edu.ptithcm.util.JsonUtils;
 import org.tinylog.Logger;
 
@@ -109,7 +109,20 @@ public class PeerConnection {
                 }else if(networkPacket.getPacketType() == NetworkPacket.PacketType.MESSAGE_ACK){
                     MessageAckPayload messageAckPayload = networkPacket.getPayloadAs(MessageAckPayload.class);
                     MessageBus.emit(new MessageSendSuccessEvent(messageAckPayload.getMessageId(), messageAckPayload.getConversationId()));
-                }else{
+                }
+                else if(networkPacket.getPacketType() == NetworkPacket.PacketType.SYNC_METADATA_REQUEST){
+                    SyncService.handleSyncMetadataRequest(networkPacket.getPayloadAs(SyncMetadataRequestPayload.class));
+                }
+                else if(networkPacket.getPacketType() == NetworkPacket.PacketType.SYNC_METADATA_RESPONSE){
+                    SyncService.handleSyncMetadataResponse(networkPacket.getPayloadAs(SyncMetadataResponsePayload.class));
+                }
+                else if(networkPacket.getPacketType() == NetworkPacket.PacketType.FETCH_MESSAGE_REQUEST){
+                    SyncService.handleFetchMessageRequest(networkPacket.getPayloadAs(FetchMessageRequestPayload.class));
+                }
+                else if(networkPacket.getPacketType() == NetworkPacket.PacketType.FETCH_MESSAGE_RESPONSE){
+                    SyncService.handleFetchMessageResponse(networkPacket.getPayloadAs(FetchMessageResponsePayload.class));
+                }
+                else{
                     Logger.warn("Unexpected NetworkPacket type to PeerConnection " + peer.getId() +" : " + networkPacket.getPacketType());
                 }
             }

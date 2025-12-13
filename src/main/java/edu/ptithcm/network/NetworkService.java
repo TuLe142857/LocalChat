@@ -14,6 +14,7 @@ import edu.ptithcm.network.service.HandshakeService;
 import edu.ptithcm.network.packet.NetworkPacket;
 import edu.ptithcm.security.CryptoUtils;
 import edu.ptithcm.service.AuthService;
+import edu.ptithcm.service.SyncService;
 import edu.ptithcm.util.JsonUtils;
 import edu.ptithcm.util.LogConfig;
 import org.tinylog.Logger;
@@ -258,6 +259,8 @@ public class NetworkService {
                 peer.setName(discoveryPayload.getPeer().getName());
         }else{
             Cache.getInstance().addPeer(discoveryPayload.getPeer());
+            Logger.debug("Found new peer, ask for sync");
+            SyncService.requestSyncMetadata(discoveryPayload.getPeer());
         }
 
     }
@@ -290,6 +293,8 @@ public class NetworkService {
                     peer.setName(discoveryPayload.getPeer().getName());
             }else{
                 Cache.getInstance().addPeer(discoveryPayload.getPeer());
+                Logger.debug("Found new peer, ask for sync");
+                SyncService.requestSyncMetadata(discoveryPayload.getPeer());
             }
         }else{
             //self broad cast, ignore

@@ -5,6 +5,7 @@ import edu.ptithcm.bus.event.MessageSendingEvent;
 import edu.ptithcm.cache.Cache;
 import edu.ptithcm.model.*;
 import edu.ptithcm.network.NetworkService;
+import edu.ptithcm.security.CredentialManager;
 import edu.ptithcm.security.CryptoUtils;
 import edu.ptithcm.service.AuthService;
 import edu.ptithcm.service.ChatService;
@@ -12,6 +13,7 @@ import edu.ptithcm.util.JsonUtils;
 import edu.ptithcm.util.LogConfig;
 
 import java.net.InetAddress;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -19,6 +21,7 @@ public class Cli {
     static Map<String, Consumer<String[]>> commandHandler = Map.of(
             "cache", Cli::showCache,
             "chat", Cli::chat,
+            "create-group", Cli::create_group,
             "exit", Cli::exit,
             "help", Cli::help
     );
@@ -27,13 +30,20 @@ public class Cli {
     static void main() throws Exception{
         LogConfig.config(false, true);
 
-        IO.println("Hello, code ui ko kịp test đỡ bằng terminal");
-        IO.println("Mới chat 1-1 thôi, chat nhóm chưa xong");
-        String name = IO.readln("Your name: ");
+        Credential credential = CredentialManager.readStoredCredential();
+        if(
+                credential == null
+                || (IO.readln("Found Stored Credential, login with this credential?(y/n) ").toLowerCase().equals("n"))
+        ){
+            String name = IO.readln("Your name: ");
+            credential = new Credential(CryptoUtils.generateRSAKeyPair(), name);
+        }else{
+            IO.println("Name: " + credential.getName());
+        }
+
         InetAddress ip = InetAddress.getByName(IO.readln("ip: "));
         int port = Integer.parseInt(IO.readln("Port: "));
 
-        Credential credential = new Credential(CryptoUtils.generateRSAKeyPair(), name);
         AuthService.login(credential, ip, port);
         ChatService.init();
         networkService = new NetworkService(ip, port);
@@ -127,6 +137,20 @@ public class Cli {
         String content = IO.readln(">> Message: ");
         Message message = conversation.createMessage(content);
         MessageBus.emit(new MessageSendingEvent(message));
+    }
+
+    static void create_group(String args[]){
+        String name = args[1];
+        ArrayList<Peer> invitedPeer = new ArrayList<>();
+        for(int i = 2; i < args.length; i++){
+            Peer p = Cache.getInstance().getPeer(args[i]);
+            if(p == null){
+                IO.println("Null peer for id " + args[i]);
+                IO.println("Cancelled create group");
+            }
+            invitedPeer.add(p);
+        }
+        ChatService.createGroupConversation(name, invitedPeer);
     }
 
     static void help(String []args){

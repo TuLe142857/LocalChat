@@ -20,9 +20,12 @@ public class Cache {
     private final ConcurrentHashMap<String, Peer> knownPeers;
     private final ConcurrentHashMap<String, Conversation> conversations;
 
+    private final ConcurrentHashMap<String, List<String>> pendingInviteGroupMember;
+
     private Cache(){
         knownPeers = new ConcurrentHashMap<>();
         conversations = new ConcurrentHashMap<>();
+        pendingInviteGroupMember = new ConcurrentHashMap<>();
     }
 
     public static Cache getInstance(){

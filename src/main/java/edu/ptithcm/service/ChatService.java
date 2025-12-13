@@ -12,9 +12,13 @@ import edu.ptithcm.network.core.PeerConnection;
 import edu.ptithcm.network.packet.NetworkPacket;
 import edu.ptithcm.util.JsonUtils;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ChatService {
+    // Key: groupId, value: list of peer id
+
     public static void init(){
         MessageBus.subscribe(
                 MessageSendingEvent.class,
@@ -45,6 +49,26 @@ public class ChatService {
         );
 
     }
+
+    /*==========================
+            GROUP CHAT
+     ============================ */
+
+    //CREATE
+
+    /**
+     * Tạo và mời các thành viên vào nhóm
+     *
+     * @param groupName
+     */
+    public static void createGroupConversation(String groupName, List<Peer> selectedPeer){
+        // new group
+        // send invite
+        // add to queue
+
+    }
+
+
 
     /**
      * Bắt buộc phải tồn tại conversation, nếu không thì hàm này không tự tạo
