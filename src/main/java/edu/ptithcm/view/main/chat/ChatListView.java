@@ -63,6 +63,7 @@ public class ChatListView extends BaseView {
         conversationListView.setCellFactory(lv -> new ConversationListCell());
         conversationListView.setStyle("-fx-background-color: transparent;");
 
+        // Listener này kích hoạt việc hiển thị tin nhắn trong ChatBoxView
         conversationListView.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal != null) {
                 onConversationSelected.accept(newVal);
@@ -78,7 +79,6 @@ public class ChatListView extends BaseView {
         this.getChildren().add(root);
     }
 
-    // NEW METHOD (Giữ nguyên)
     private void handleNewGroupCreated(GroupConversation newGroup) {
         loadData();
         conversationListView.getSelectionModel().select(newGroup);
@@ -102,31 +102,42 @@ public class ChatListView extends BaseView {
         this.unsubscribeRunnable = MessageBus.subscribe(MessageReceivedEvent.class, this::handleMessageReceived);
     }
 
-    // NEW METHOD: Sửa lỗi không cập nhật realtime bằng cách TỰ ĐỘNG CHỌN Conversation
+    // FIX LỖI: Mất chọn và không cập nhật sau khi loadData()
     private void handleMessageReceived(MessageReceivedEvent event) {
-        // 1. Lấy ID của người gửi (chính là ID của Direct Conversation trên Host nhận)
         final String senderId = event.getMessage().getSenderId();
 
         Platform.runLater(() -> {
-            // Lấy ID của Conversation đang được chọn trước khi reload.
             Conversation currentlySelected = conversationListView.getSelectionModel().getSelectedItem();
             String currentConvId = currentlySelected != null ? currentlySelected.getId() : null;
 
-            // 2. Tải lại dữ liệu (loadData()):
+            // Cờ kiểm tra xem cuộc trò chuyện đang nhận tin nhắn có đang được xem hay không.
+            boolean isTargetCurrentlySelected = senderId.equals(currentConvId);
+
+            // BƯỚC 1: Nếu Conversation đang được chọn là Conversation nhận tin nhắn,
+            // ta phải BẮT BUỘC xóa selection để thao tác select() sau đó kích hoạt Listener.
+            // Điều này giải quyết vấn đề mất tô màu xanh và không kích hoạt updateMessageArea()
+            if (isTargetCurrentlySelected) {
+                conversationListView.getSelectionModel().clearSelection();
+            }
+
+            // BƯỚC 2: Tải lại dữ liệu (loadData()): Đảm bảo tin nhắn mới lên đầu
             loadData();
 
-            // 3. Tự động chọn Conversation vừa nhận tin nhắn.
+            // BƯỚC 3: Tìm Conversation mới sau khi loadData
             Conversation convToSelect = conversations.stream()
                     .filter(c -> c.getId().equals(senderId))
                     .findFirst()
                     .orElse(null);
 
             if (convToSelect != null) {
-                // **Luôn kích hoạt selection** cho Conversation vừa nhận tin nhắn.
-                // Việc chọn này sẽ kích hoạt listener và gọi ChatBox.setActiveConversation(convToSelect)
+                // BƯỚC 4: Re-select.
+                // Thao tác này sẽ đảm bảo:
+                // a) Item đó được tô xanh lại (isSelected() = true).
+                // b) Listener selectedItemProperty thay đổi (vì đã clear hoặc object reference mới)
+                //    -> Kích hoạt onConversationSelected -> ChatBoxView.setActiveConversation -> updateMessageArea().
                 conversationListView.getSelectionModel().select(convToSelect);
             } else if (currentConvId != null) {
-                // Trường hợp đặc biệt (rất hiếm): Cố gắng chọn lại Conversation đang xem để không làm mất trạng thái.
+                // Logic phòng ngừa: nếu không tìm thấy convToSelect, cố gắng chọn lại conv cũ nếu có.
                 Conversation reSelectConv = conversations.stream()
                         .filter(c -> c.getId().equals(currentConvId))
                         .findFirst()
@@ -147,7 +158,6 @@ public class ChatListView extends BaseView {
         }
     }
 
-    // NEW CLASS
     private class ConversationListCell extends ListCell<Conversation> {
         @Override
         protected void updateItem(Conversation conv, boolean empty) {
