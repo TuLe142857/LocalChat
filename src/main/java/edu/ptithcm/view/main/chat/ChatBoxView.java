@@ -266,9 +266,7 @@ public class ChatBoxView extends BaseView {
     // Logic này cập nhật icon trạng thái tin nhắn gửi đi (SUCCESS)
     private void handleMessageSuccess(MessageSendSuccessEvent event) {
         // Chỉ cập nhật UI nếu tin nhắn thuộc Conversation đang mở
-        Logger.info("SUCCESS ROI NE============================");
         if (activeConversation != null && activeConversation.getId().equals(event.getConversationId())) {
-            Logger.info("Ko thoa dieu kien roi ma oi");
             Platform.runLater(this::updateMessageArea);
         }
     }

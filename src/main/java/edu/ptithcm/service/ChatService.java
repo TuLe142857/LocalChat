@@ -15,6 +15,7 @@ import edu.ptithcm.util.JsonUtils;
 import edu.ptithcm.util.LogConfig;
 import org.tinylog.Logger;
 
+import javax.xml.catalog.Catalog;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -386,6 +387,11 @@ public class ChatService {
 
     public static void onSendSuccessMessage(String messageId, String conversationId){
         Conversation conversation = Cache.getInstance().getConversation(conversationId);
+        IO.println("Conversation Id: " + conversationId);
+        List<Conversation> lst_con = Cache.getInstance().getConversationList();
+        for (Conversation con : lst_con){
+            IO.println("Conversation in list: " + con.getId());
+        }
         if(conversation == null)
             return;
         conversation.getPendingMessage()
