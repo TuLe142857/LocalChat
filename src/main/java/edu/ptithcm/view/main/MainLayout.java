@@ -4,12 +4,14 @@ import edu.ptithcm.view.base.BaseView;
 import edu.ptithcm.view.main.chat.ChatLayout;
 import edu.ptithcm.view.main.search.SearchView;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.VBox;
 
 public class MainLayout extends BaseView {
 
     private BorderPane rootLayout;
     private BaseView currentContentView; // Để gọi onRemove khi switch tab
     private Runnable onLogoutRequest;
+
     public MainLayout(Runnable onLogoutRequest){
         this.onLogoutRequest = onLogoutRequest;
     }
@@ -26,7 +28,11 @@ public class MainLayout extends BaseView {
         // Tạo Sidebar và truyền callback xử lý khi user click menu
         SidebarView sidebar = new SidebarView(this::switchContent);
 
-        rootLayout.setLeft(sidebar);
+        // Bọc sidebar để cố định chiều rộng (optional, nhưng giúp layout ổn định)
+        VBox sidebarWrapper = new VBox(sidebar);
+        sidebarWrapper.setStyle("-fx-pref-width: 200;");
+
+        rootLayout.setLeft(sidebarWrapper);
 
         // Mặc định hiện Chat
         switchContent("CHAT");
@@ -42,27 +48,35 @@ public class MainLayout extends BaseView {
         }
 
         // 2. Tạo view mới
+        BaseView nextView = null;
         switch (viewName) {
             case "CHAT":
-                currentContentView = new ChatLayout();
+                nextView = new ChatLayout();
                 break;
             case "SEARCH":
-                currentContentView = new SearchView(); // Giả sử đã tạo class này
+                nextView = new SearchView();
                 break;
-            case "SETTING":
-                // currentContentView = new SettingView();
-                break;
+            // Removed "SETTING" case as requested
             case "LOGOUT":
                 onLogoutRequest.run();
-                break;
+                return;
             default:
                 return;
         }
 
+        currentContentView = nextView;
         // 3. Gắn vào Center
         rootLayout.setCenter(currentContentView);
     }
 
     @Override public void loadData() {}
     @Override public void setupEventBus() {}
+
+    @Override
+    public void onRemove() {
+        super.onRemove();
+        if (currentContentView != null) {
+            currentContentView.onRemove();
+        }
+    }
 }

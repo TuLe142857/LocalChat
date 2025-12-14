@@ -15,21 +15,21 @@ public class SidebarView extends VBox {
 
         // Avatar area (Placeholder)
         Button btnAccount = new Button("Account Info");
+        btnAccount.setMaxWidth(Double.MAX_VALUE);
 
         // Menu Items
         Button btnChat = new Button("Chat");
+        btnChat.setMaxWidth(Double.MAX_VALUE);
         btnChat.setOnAction(e -> onMenuSelected.accept("CHAT"));
 
-        Button btnSearch = new Button("Search Peer");
+        Button btnSearch = new Button("Search Peer / Group");
+        btnSearch.setMaxWidth(Double.MAX_VALUE);
         btnSearch.setOnAction(e -> onMenuSelected.accept("SEARCH"));
 
-        Button btnSetting = new Button("Settings");
-        btnSetting.setOnAction(e -> onMenuSelected.accept("SETTING"));
-
         Button btnLogout = new Button("Logout");
+        btnLogout.setMaxWidth(Double.MAX_VALUE);
         btnLogout.setOnAction(e->onMenuSelected.accept("LOGOUT"));
-        // Logic logout sẽ xử lý ở tầng trên hoặc bắn event
 
-        this.getChildren().addAll(btnAccount, btnChat, btnSearch, btnSetting, btnLogout);
+        this.getChildren().addAll(btnAccount, btnChat, btnSearch, btnLogout);
     }
 }
