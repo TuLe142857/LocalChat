@@ -376,6 +376,9 @@ public class ChatService {
         }
 
         conversation.onReceiveMessage(message);
+        MessageBus.emit(new MessageReceivedEvent(message));
+
+        //send ack reply đã làm ở PeerConnection.listen();
     }
 
     public static void onSendSuccessMessage(String messageId, String conversationId){
@@ -389,6 +392,7 @@ public class ChatService {
                 .ifPresent(
                         message -> {message.setStatus(Message.MessageStatus.SUCCESS);}
                 );
+        MessageBus.emit(new MessageSendSuccessEvent(messageId, conversationId));
     }
 
     private static void onSendFailedMessage(String messageId, String conversationId){
@@ -402,6 +406,7 @@ public class ChatService {
                 .ifPresent(
                         message -> {message.setStatus(Message.MessageStatus.FAILED);}
                 );
+        MessageBus.emit(new MessageSendFailedEvent(messageId, conversationId));
     }
 
 }

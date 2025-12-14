@@ -91,6 +91,12 @@ public class Cache {
     public Set<Map.Entry<String, Peer>> getPeerEntrySet(){
         return knownPeers.entrySet();
     }
+
+    // not include self peer
+    public List<Peer> getPeerList(){
+        return new ArrayList<>(this.knownPeers.values());
+    }
+
     public Conversation getConversation(String id){
         return this.conversations.get(id);
     }
