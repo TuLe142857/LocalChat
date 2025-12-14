@@ -6,6 +6,7 @@ import edu.ptithcm.bus.event.MessageSendFailedEvent;
 import edu.ptithcm.bus.event.MessageSendSuccessEvent;
 import edu.ptithcm.cache.Cache;
 import edu.ptithcm.model.Conversation;
+import edu.ptithcm.model.GroupConversation;
 import edu.ptithcm.model.Message;
 import edu.ptithcm.service.ChatService;
 import edu.ptithcm.view.base.BaseView;
@@ -34,6 +35,8 @@ public class ChatBoxView extends BaseView {
     private ObservableList<Message> messages;
     private TextField inputField;
     private Button sendButton;
+    private Button viewMembersButton; // ĐÃ THÊM
+
     private Runnable unsubscribeReceived;
     private Runnable unsubscribeSendSuccess;
     private Runnable unsubscribeSendFailed;
@@ -42,7 +45,6 @@ public class ChatBoxView extends BaseView {
     @Override
     protected void init() {
         messages = FXCollections.observableArrayList();
-        // Ban đầu ẩn đi
         this.setVisible(false);
     }
 
@@ -50,21 +52,29 @@ public class ChatBoxView extends BaseView {
     protected void setupUI() {
         BorderPane layout = new BorderPane();
 
-        // Top: Tên cuộc trò chuyện
+        // Top Header Area
         conversationNameLabel = new Label("Select a chat");
-        conversationNameLabel.setStyle("-fx-font-size: 1.2em; -fx-padding: 10; -fx-border-width: 0 0 1 0; -fx-border-color: #ccc;");
-        conversationNameLabel.setMaxWidth(Double.MAX_VALUE);
+        conversationNameLabel.setStyle("-fx-font-size: 1.2em; -fx-font-weight: bold;");
+
+        viewMembersButton = new Button("View Members"); // ĐÃ THÊM NÚT
+        viewMembersButton.setOnAction(e -> viewGroupMembers());
+        viewMembersButton.setManaged(false); // Ẩn/hiện bằng setManaged/setVisible
+
+        HBox headerBox = new HBox(10, conversationNameLabel, viewMembersButton);
+        headerBox.setPadding(new Insets(10));
+        headerBox.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(conversationNameLabel, Priority.ALWAYS); // Đẩy nút ViewMembers sang phải
 
         // Center: Hiển thị tin nhắn
         messageListView = new ListView<>(messages);
         messageListView.setCellFactory(param -> new MessageItem());
         VBox.setVgrow(messageListView, Priority.ALWAYS);
-        messageListView.setStyle("-fx-background-color: #f5f5f5;"); // Màu nền chat
+        messageListView.setStyle("-fx-background-color: #f5f5f5;");
 
         // Bottom: Thanh nhập liệu
         inputField = new TextField();
         inputField.setPromptText("Type message...");
-        inputField.setOnAction(e -> sendMessage()); // Send on Enter
+        inputField.setOnAction(e -> sendMessage());
         HBox.setHgrow(inputField, Priority.ALWAYS);
 
         sendButton = new Button("Send");
@@ -74,12 +84,11 @@ public class ChatBoxView extends BaseView {
         inputBar.setPadding(new Insets(10));
         inputBar.setAlignment(Pos.CENTER);
 
-        VBox centerContent = new VBox(conversationNameLabel, messageListView, inputBar);
+        VBox centerContent = new VBox(headerBox, messageListView, inputBar); // DÙNG headerBox MỚI
         VBox.setVgrow(messageListView, Priority.ALWAYS);
 
         layout.setCenter(centerContent);
 
-        // Kích hoạt/Vô hiệu hóa input khi chưa chọn chat
         inputField.setDisable(true);
         sendButton.setDisable(true);
 
@@ -93,18 +102,30 @@ public class ChatBoxView extends BaseView {
             // 1. Cập nhật UI
             conversationNameLabel.setText(conversation.getName());
 
-            // 2. Load tin nhắn
+            // 2. Ẩn/hiện nút View Members
+            boolean isGroup = conversation instanceof GroupConversation;
+            viewMembersButton.setVisible(isGroup);
+            viewMembersButton.setManaged(isGroup);
+
+            // 3. Load tin nhắn
             messages.setAll(conversation.getMessageList());
 
-            // 3. Kích hoạt input
+            // 4. Kích hoạt input
             inputField.setDisable(false);
             sendButton.setDisable(false);
 
-            // 4. Scroll xuống cuối
+            // 5. Scroll xuống cuối
             Platform.runLater(() -> messageListView.scrollTo(messages.size() - 1));
 
-            // 5. Hiện thị giao diện chat
+            // 6. Hiện thị giao diện chat
             this.setVisible(true);
+        }
+    }
+
+    private void viewGroupMembers() {
+        if (currentConversation instanceof GroupConversation) {
+            GroupMemberView memberView = new GroupMemberView((GroupConversation) currentConversation);
+            memberView.show();
         }
     }
 
@@ -115,15 +136,10 @@ public class ChatBoxView extends BaseView {
         }
 
         try {
-            // 1. Tạo tin nhắn, tự tăng Lamport Clock và thêm vào Conversation.messages
             Message message = currentConversation.createMessage(content);
-
-            // 2. Gửi đi
             ChatService.sendMessage(message);
-
-            // 3. Cập nhật UI
             inputField.clear();
-            messages.setAll(currentConversation.getMessageList()); // Reload list for correct sorting/status
+            messages.setAll(currentConversation.getMessageList());
             Platform.runLater(() -> messageListView.scrollTo(messages.size() - 1));
 
         } catch (Exception e) {
@@ -136,10 +152,7 @@ public class ChatBoxView extends BaseView {
 
     @Override
     public void setupEventBus() {
-        // Subscribe to incoming messages
         unsubscribeReceived = MessageBus.subscribe(MessageReceivedEvent.class, this::handleMessageReceived);
-
-        // Subscribe to outgoing message status updates
         unsubscribeSendSuccess = MessageBus.subscribe(MessageSendSuccessEvent.class, this::handleMessageSendSuccess);
         unsubscribeSendFailed = MessageBus.subscribe(MessageSendFailedEvent.class, this::handleMessageSendFailed);
     }
@@ -147,13 +160,11 @@ public class ChatBoxView extends BaseView {
     private void handleMessageReceived(MessageReceivedEvent event) {
         Message receivedMessage = event.getMessage();
 
-        // Xác định ID của cuộc trò chuyện dựa trên loại tin nhắn
         boolean isDirectChatToMe = receivedMessage.getConversationId().equals(Cache.getInstance().getCredential().getId());
         String expectedConversationId = isDirectChatToMe ? receivedMessage.getSenderId() : receivedMessage.getConversationId();
 
         if (currentConversation != null && currentConversation.getId().equals(expectedConversationId)) {
             Platform.runLater(() -> {
-                // Tin nhắn đã được thêm vào conversation trong ChatService.onReceiveMessage
                 messages.setAll(currentConversation.getMessageList());
                 messageListView.scrollTo(messages.size() - 1);
             });
@@ -167,8 +178,6 @@ public class ChatBoxView extends BaseView {
                         .filter(m -> m.getId().equals(messageId))
                         .findFirst()
                         .ifPresent(message -> {
-                            // Cập nhật trạng thái trực tiếp trên đối tượng Message trong ObservableList
-                            // Tuy nhiên, để force ListView cập nhật cell, ta cần set lại list
                             messages.setAll(currentConversation.getMessageList());
                             messageListView.scrollTo(messages.size() - 1);
                         });
