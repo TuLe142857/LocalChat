@@ -23,7 +23,7 @@ public class SyncMetadataRequestPayload implements Signable {
 
     @Override
     public String getSignableData() {
-        return senderId+timestamp;
+        return senderId + timestamp;
     }
 
     @Override

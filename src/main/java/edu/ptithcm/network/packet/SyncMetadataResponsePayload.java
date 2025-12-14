@@ -82,7 +82,7 @@ public class SyncMetadataResponsePayload implements Signable {
 
     @Override
     public String getSignableData() {
-        return "";
+        return senderId + directChatClock + timestamp;
     }
 
     @Override

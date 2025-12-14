@@ -7,8 +7,8 @@ import edu.ptithcm.security.Signable;
 
 public class DiscoveryPayload implements Signable {
     private final Peer peer;
-    private final long timestamp;
 
+    private final long timestamp;
     private String signature;
 
     public DiscoveryPayload(Peer peer) {
