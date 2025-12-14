@@ -9,10 +9,7 @@ import edu.ptithcm.model.Peer;
 
 import java.net.InetAddress;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.concurrent.atomic.AtomicLong; // NEW IMPORT
+        import java.util.concurrent.ConcurrentHashMap;
 
 public class Cache {
     private static final Cache instance = new Cache();
@@ -21,9 +18,6 @@ public class Cache {
     private Credential credential;
     private InetAddress ip;
     private int port; // tcp listening port
-
-    // Lamport Clock
-    private final AtomicLong lamportClock; // NEW FIELD for Lamport Clock
 
     // chat cache
     private final ConcurrentHashMap<String, Peer> knownPeers;
@@ -38,28 +32,6 @@ public class Cache {
 
     public static Cache getInstance(){
         return instance;
-    }
-
-    // NEW METHOD: Increment and get the new Lamport Clock value
-    public long incrementLamportClock() {
-        return lamportClock.incrementAndGet();
-    }
-
-    // NEW METHOD: Update Lamport Clock based on incoming message's clock
-    public void updateLamportClock(long receivedClock) {
-        long currentClock = lamportClock.get();
-        // Cố gắng đặt giá trị lớn hơn. Nếu receivedClock > currentClock, đặt giá trị mới
-        while (receivedClock > currentClock && !lamportClock.compareAndSet(currentClock, receivedClock)) {
-            currentClock = lamportClock.get();
-        }
-        // Sau khi đã đồng bộ, increment thêm 1 (theo luật Lamport Clock)
-        if (receivedClock >= currentClock) {
-            lamportClock.incrementAndGet();
-        }
-    }
-
-    public long getLamportClock() {
-        return lamportClock.get();
     }
 
     // clear cache (use for logout, ...)
@@ -122,9 +94,6 @@ public class Cache {
     public Conversation getConversation(String id){
         return this.conversations.get(id);
     }
-    public Collection<Peer> getKnownPeersCollection(){
-        return Collections.unmodifiableCollection(knownPeers.values());
-    }
     public List<Conversation> getConversationList(){
         return new ArrayList<>(this.conversations.values());
     }
@@ -153,7 +122,6 @@ public class Cache {
         return removed;
     }
 
-    // NEW METHOD: Get peer list for SearchView
     public List<Peer> getPeerList(){
         return new ArrayList<>(this.knownPeers.values());
     }

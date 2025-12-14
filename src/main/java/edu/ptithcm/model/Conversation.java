@@ -56,9 +56,6 @@ public abstract class Conversation {
         if(this.lamportClock < message.getLamportClock())
             this.lamportClock = message.getLamportClock();
         this.messages.add(message);
-
-        // Sắp xếp lại danh sách theo Lamport Clock và ID
-        this.messages.sort(Comparator.comparing(Message::getLamportClock).thenComparing(Message::getId));
     }
 
     /**
