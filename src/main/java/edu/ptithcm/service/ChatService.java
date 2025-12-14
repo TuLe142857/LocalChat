@@ -361,13 +361,11 @@ public class ChatService {
             DirectConversation dConversation = new DirectConversation(partner);
             Cache.getInstance().addConversation(dConversation);
             dConversation.onReceiveMessage(message);
-            return;
         }
-
-        conversation.onReceiveMessage(message);
+        else{
+            conversation.onReceiveMessage(message);
+        }
         MessageBus.emit(new MessageReceivedEvent(message));
-
-        //send ack reply đã làm ở PeerConnection.listen();
     }
 
     public static void onSendSuccessMessage(String messageId, String conversationId){
