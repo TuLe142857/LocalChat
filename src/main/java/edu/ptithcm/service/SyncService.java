@@ -365,7 +365,7 @@ public class SyncService {
         // try fetch more message if possible
         Message firstMessage = conversation.getSuccessMessage().getFirst();
         if(firstMessage != null && firstMessage.getLamportClock() > 1){
-            requestFetchMessageDirectConversation(conversation.getId(), firstMessage.getLamportClock(), 50);
+            requestFetchMessageDirectConversation(conversation.getId(), firstMessage.getLamportClock()-1, 50);
         }
     }
 }
