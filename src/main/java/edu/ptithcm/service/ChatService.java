@@ -357,7 +357,7 @@ public class ChatService {
             if(partner == null)
                 return;
 
-            IO.println("Create new direct conversation");
+            Logger.debug("Create new direct conversation");
             DirectConversation dConversation = new DirectConversation(partner);
             Cache.getInstance().addConversation(dConversation);
             dConversation.onReceiveMessage(message);
