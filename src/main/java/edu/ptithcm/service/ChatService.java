@@ -353,6 +353,8 @@ public class ChatService {
                                 : (message.getConversationId());
         Conversation conversation = Cache.getInstance().getConversation(conversationId);
         if(conversation == null){
+            if(!isDirectChatMessage)
+                return;
             Peer partner = Cache.getInstance().getPeer(message.getSenderId());
             if(partner == null)
                 return;
