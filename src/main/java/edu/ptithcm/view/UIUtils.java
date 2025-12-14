@@ -15,21 +15,16 @@ import java.util.regex.Pattern;
 public class UIUtils {
 
     // Bộ ánh xạ cho các biểu tượng cảm xúc tùy chỉnh
-    // ĐÃ THÊM: :D, :(, :'(, <3, :O, :P, T_T
     private static final Pattern EMOJI_PATTERN = Pattern.compile("(:v|:\\)|:\\)\\)|:D|:\\(|:'\\(|<3|:O|:P|T_T)");
     private static final String EMOJI_FONT_SIZE = "-fx-font-size: 1.2em;";
 
     /**
      * Tạo icon hiển thị trạng thái tin nhắn.
-     * PENDING: Vòng tròn xám nhỏ (chờ gửi)
-     * SUCCESS: Vòng tròn xanh lá (đã gửi/đã nhận)
-     * FAILED: Ký tự X màu đỏ (gửi thất bại)
-     * @param status
-     * @return
+     * ... (Giữ nguyên logic này) ...
      */
     public static Node getMessageStatusIcon(Message.MessageStatus status) {
         HBox iconWrapper = new HBox();
-        iconWrapper.setStyle("-fx-min-width: 10px; -fx-min-height: 10px;"); // Cố định kích thước
+        iconWrapper.setStyle("-fx-min-width: 10px; -fx-min-height: 10px;");
 
         if (status == null) {
             return iconWrapper;
@@ -37,19 +32,16 @@ public class UIUtils {
 
         switch (status) {
             case PENDING:
-                // Dùng Circle màu xám
                 Circle pending = new Circle(3);
                 pending.setFill(Color.GRAY);
                 iconWrapper.getChildren().add(pending);
                 return iconWrapper;
             case SUCCESS:
-                // Dùng Circle màu xanh
                 Circle success = new Circle(3);
-                success.setFill(Color.web("#4CAF50")); // Green
+                success.setFill(Color.web("#4CAF50"));
                 iconWrapper.getChildren().add(success);
                 return iconWrapper;
             case FAILED:
-                // Dùng Text '✕' màu đỏ
                 Text failed = new Text("✕");
                 failed.setFont(Font.font("Arial", 8));
                 failed.setFill(Color.RED);
@@ -74,6 +66,7 @@ public class UIUtils {
             // 1. Thêm đoạn text trước biểu tượng cảm xúc
             if (matcher.start() > lastAppendPosition) {
                 String precedingText = content.substring(lastAppendPosition, matcher.start());
+                // QUAN TRỌNG: Thêm text node bình thường
                 textFlow.getChildren().add(new Text(precedingText));
             }
 
@@ -88,6 +81,7 @@ public class UIUtils {
 
         // 3. Thêm phần còn lại của chuỗi
         if (lastAppendPosition < content.length()) {
+            // QUAN TRỌNG: Thêm text node bình thường
             textFlow.getChildren().add(new Text(content.substring(lastAppendPosition)));
         }
 
@@ -102,27 +96,27 @@ public class UIUtils {
     private static String mapTextToEmoji(String text) {
         switch (text) {
             case ":v":
-                return "😅"; // Cười mồ hôi/mồm chữ V
+                return "😅";
             case ":)":
-                return "😊"; // Mặt cười đơn giản
+                return "😊";
             case ":))":
-                return "😄"; // Mặt cười lớn
+                return "😄";
             case ":D":
-                return "😀"; // Cười hớn hở
+                return "😀";
             case ":(":
-                return "😞"; // Mặt buồn
+                return "😞";
             case ":'(":
-                return "😢"; // Khóc
+                return "😢";
             case "<3":
-                return "❤️"; // Trái tim
+                return "❤️";
             case ":O":
-                return "😮"; // Ngạc nhiên
+                return "😮";
             case ":P":
-                return "😛"; // Lè lưỡi
+                return "😛";
             case "T_T":
-                return "😭"; // Khóc lớn
+                return "😭";
             default:
-                return text; // Giữ nguyên nếu không khớp
+                return text;
         }
     }
 }

@@ -10,7 +10,8 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
-import javafx.scene.layout.Region; // Import Region
+import javafx.scene.layout.Region;
+import edu.ptithcm.model.GroupConversation; // Cần import này
 
 public class MessageItem extends ListCell<Message> {
 
@@ -29,7 +30,10 @@ public class MessageItem extends ListCell<Message> {
         boolean isMine = message.getSenderId().equals(myId);
 
         HBox messageWrapper = new HBox();
-        TextFlow messageTextFlow = new TextFlow();
+
+        // SỬ DỤNG UIUtils.convertToEmojiTextFlow để xử lý emoji
+        // QUAN TRỌNG: TextFlow này hiện chỉ chứa nội dung tin nhắn và emoji
+        TextFlow messageTextFlow = UIUtils.convertToEmojiTextFlow(message.getContent());
         messageTextFlow.setPadding(new Insets(5));
 
         String senderName = isMine ? "You" : (Cache.getInstance().getPeer(message.getSenderId()) != null ? Cache.getInstance().getPeer(message.getSenderId()).getName() : "Unknown");
@@ -37,14 +41,11 @@ public class MessageItem extends ListCell<Message> {
         VBox messageContent = new VBox();
         messageContent.setSpacing(2);
 
-        // THÊM: Đặt giới hạn chiều rộng tối đa cho bong bóng tin nhắn (ví dụ: 80% chiều rộng của ListView)
-        // Điều này giúp TextFlow wrap văn bản thay vì cố gắng mở rộng quá mức theo chiều ngang.
+        // ĐẶT GIỚI HẠN CHIỀU RỘNG TỐI ĐA
         if (getListView() != null) {
-            // Lấy chiều rộng của ListView và giới hạn TextFlow không quá 80%
             double maxWidth = getListView().getWidth() * 0.8;
             messageTextFlow.setMaxWidth(maxWidth);
         } else {
-            // Fallback an toàn (giá trị mặc định lớn)
             messageTextFlow.setMaxWidth(Region.USE_PREF_SIZE);
         }
 
@@ -57,17 +58,15 @@ public class MessageItem extends ListCell<Message> {
         }
 
         // 1. Sender Name (Chỉ hiện cho group chat và không phải tin của mình)
-        if (!isMine && Cache.getInstance().getConversation(message.getConversationId()) instanceof edu.ptithcm.model.GroupConversation) {
+        if (!isMine && Cache.getInstance().getConversation(message.getConversationId()) instanceof GroupConversation) {
             Text name = new Text(senderName + "\n");
             name.setStyle("-fx-font-weight: bold; -fx-fill: #3b5998; -fx-font-size: 0.8em;"); // Blue color for name
-            messageTextFlow.getChildren().add(name);
+
+            // THÊM TÊN NGƯỜI GỬI VÀO ĐẦU TextFlow
+            messageTextFlow.getChildren().add(0, name);
         }
 
-        // 2. Content
-        Text content = new Text(message.getContent());
-        messageTextFlow.getChildren().add(content);
-
-        // 3. Status Icon (Chỉ hiện cho tin nhắn đi)
+        // 2. Status Icon (Chỉ hiện cho tin nhắn đi)
         if (isMine) {
             HBox statusBox = new HBox();
             statusBox.setPadding(new Insets(0, 0, 0, 5));
