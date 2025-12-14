@@ -24,8 +24,10 @@ public class ChatListView extends BaseView {
     private ListView<Conversation> conversationListView;
     private ObservableList<Conversation> conversations;
     private Runnable unsubscribeNewConversation;
-    // Dùng List để lưu trữ nhiều Runnable hủy đăng ký
-    private final List<Runnable> messageUpdatesUnsubscribers = new ArrayList<>();
+
+    // ĐÃ SỬA: Bỏ 'final' và chuyển khởi tạo sang init()
+    private List<Runnable> messageUpdatesUnsubscribers;
+
     private final Consumer<Conversation> onConversationSelected;
 
     public ChatListView(Consumer<Conversation> onConversationSelected) {
@@ -35,6 +37,8 @@ public class ChatListView extends BaseView {
     @Override
     protected void init() {
         conversations = FXCollections.observableArrayList();
+        // ĐÃ SỬA: Khởi tạo danh sách ở đây
+        messageUpdatesUnsubscribers = new ArrayList<>();
     }
 
     @Override
@@ -69,7 +73,6 @@ public class ChatListView extends BaseView {
 
         // Đăng ký cho các sự kiện cập nhật tin nhắn
         // Sử dụng lambda expression (event -> Platform.runLater(this::refreshListUI))
-        // để trình biên dịch tự suy luận kiểu Consumer<T> cho từng loại sự kiện T.
 
         messageUpdatesUnsubscribers.add(
                 MessageBus.subscribe(MessageReceivedEvent.class, event -> Platform.runLater(this::refreshListUI))
@@ -115,9 +118,11 @@ public class ChatListView extends BaseView {
             unsubscribeNewConversation.run();
         }
         // Hủy đăng ký tất cả các MessageBus listeners
-        for (Runnable r : messageUpdatesUnsubscribers) {
-            r.run();
+        if (messageUpdatesUnsubscribers != null) {
+            for (Runnable r : messageUpdatesUnsubscribers) {
+                r.run();
+            }
+            messageUpdatesUnsubscribers.clear();
         }
-        messageUpdatesUnsubscribers.clear();
     }
 }
