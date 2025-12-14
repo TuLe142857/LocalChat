@@ -7,11 +7,13 @@ import edu.ptithcm.bus.event.MessageSendSuccessEvent;
 
 import edu.ptithcm.cache.Cache;
 import edu.ptithcm.model.*;
-import edu.ptithcm.network.core.ConnectionPool;
-import edu.ptithcm.network.core.PeerConnection;
+import edu.ptithcm.network.connection.ConnectionPool;
 import edu.ptithcm.network.packet.*;
+import edu.ptithcm.network.packet.payload.GroupInviteAckPayload;
+import edu.ptithcm.network.packet.payload.GroupInvitePayload;
+import edu.ptithcm.network.packet.payload.GroupUpdatePayload;
+import edu.ptithcm.network.packet.payload.SyncMetadataResponsePayload;
 import edu.ptithcm.util.JsonUtils;
-import edu.ptithcm.util.LogConfig;
 import org.tinylog.Logger;
 
 import java.io.IOException;
@@ -57,21 +59,22 @@ public class ChatService {
             DirectConversation dConversation = (DirectConversation)(conversation);
             Peer targetPeer = dConversation.getPartner();
             ConnectionPool.getInstance().getOrConnect(targetPeer)
-                    .thenAccept(peerConnection -> {
-                        NetworkPacket networkPacket = new NetworkPacket(NetworkPacket.PacketType.MESSAGE, JsonUtils.toJson(message));
-                        try{
-                            peerConnection.sendNetworkPacket(networkPacket);
-                        }catch (Exception e){
+                .thenAccept(peerConnection -> {
+                    NetworkPacket networkPacket = new NetworkPacket(NetworkPacket.PacketType.MESSAGE, JsonUtils.toJson(message));
+                    try{
+                        peerConnection.sendNetworkPacket(networkPacket);
+                    }catch (Exception e){
+                        ChatService.onSendFailedMessage(message.getId(), message.getConversationId());
+                    }
+                })
+                .exceptionally(
+                        t ->{
                             ChatService.onSendFailedMessage(message.getId(), message.getConversationId());
+                            return  null;
                         }
-                    })
-                    .exceptionally(
-                            t ->{
-                                ChatService.onSendFailedMessage(message.getId(), message.getConversationId());
-                                return  null;
-                            }
-                    );
-        }else if(conversation instanceof GroupConversation){
+                );
+        }
+        else if(conversation instanceof GroupConversation){
             GroupConversation gConversation = (GroupConversation)(conversation);
             NetworkPacket networkPacket = new NetworkPacket(NetworkPacket.PacketType.MESSAGE, JsonUtils.toJson(message));
             for(Peer targetPeer: gConversation.getParticipantList()){
@@ -80,22 +83,19 @@ public class ChatService {
                 if (targetPeer.getId().equals(Cache.getInstance().getCredential().getId())) continue;
 
                 ConnectionPool.getInstance().getOrConnect(targetPeer)
-                        .thenAccept(
-                                peerConnection -> {
-                                    try{
-                                        peerConnection.sendNetworkPacket(networkPacket);
-//                                        allSendFailed = false;
-                                    }catch (Exception e){
-//                                        ChatService.onSendFailedMessage(message.getId(), message.getConversationId());
-                                    }
-                                }
-                        )
-                        .exceptionally(
-                                t->{
-//                                    ChatService.onSendFailedMessage(message.getId(), message.getConversationId());
-                                    return  null;
-                                }
-                        );
+                    .thenAccept(
+                        peerConnection -> {
+                            try{
+                                peerConnection.sendNetworkPacket(networkPacket);
+
+                            }catch (Exception e){}
+                        }
+                )
+                .exceptionally(
+                        t->{
+                            return  null;
+                        }
+                    );
             }
         }
     }
@@ -357,17 +357,15 @@ public class ChatService {
             if(partner == null)
                 return;
 
-            IO.println("Create new direct conversation");
+            Logger.debug("Create new direct conversation");
             DirectConversation dConversation = new DirectConversation(partner);
             Cache.getInstance().addConversation(dConversation);
             dConversation.onReceiveMessage(message);
-            return;
         }
-
-        conversation.onReceiveMessage(message);
+        else{
+            conversation.onReceiveMessage(message);
+        }
         MessageBus.emit(new MessageReceivedEvent(message));
-
-        //send ack reply đã làm ở PeerConnection.listen();
     }
 
     public static void onSendSuccessMessage(String messageId, String conversationId){

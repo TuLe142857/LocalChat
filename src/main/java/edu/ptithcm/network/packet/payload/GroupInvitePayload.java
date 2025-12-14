@@ -1,18 +1,21 @@
-package edu.ptithcm.network.packet;
+package edu.ptithcm.network.packet.payload;
 
 import edu.ptithcm.security.Signable;
 
-public class GroupInviteAckPayload implements Signable {
+/**
+ * Only Group Owner can invite member
+ */
+public class GroupInvitePayload implements Signable {
+    private final String senderId;
     private final String groupId;
-    private final String senderId; // Người được mời
-    private final boolean accept;
+    private final String groupName;
     private final long timestamp;
     private String signature;
 
-    public GroupInviteAckPayload(String groupId, String senderId, boolean accept) {
-        this.groupId = groupId;
+    public GroupInvitePayload(String senderId, String groupId, String groupName) {
         this.senderId = senderId;
-        this.accept = accept;
+        this.groupId = groupId;
+        this.groupName = groupName;
         this.timestamp = System.currentTimeMillis();
     }
 
@@ -24,8 +27,8 @@ public class GroupInviteAckPayload implements Signable {
         return groupId;
     }
 
-    public boolean isAccept() {
-        return accept;
+    public String getGroupName() {
+        return groupName;
     }
 
     public long getTimestamp() {
@@ -34,7 +37,7 @@ public class GroupInviteAckPayload implements Signable {
 
     @Override
     public String getSignableData() {
-        return groupId + senderId + accept + timestamp;
+        return senderId + groupId + groupName + timestamp;
     }
 
     @Override

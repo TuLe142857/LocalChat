@@ -1,6 +1,4 @@
-package edu.ptithcm.network.packet;
-
-import edu.ptithcm.security.Signable;
+package edu.ptithcm.network.packet.payload;
 
 /**
  * Thông báo bên kia biết đã nhận được tin nhắn

@@ -1,4 +1,4 @@
-package edu.ptithcm.network.packet;
+package edu.ptithcm.network.packet.payload;
 
 import edu.ptithcm.security.CryptoUtils;
 import edu.ptithcm.security.Signable;

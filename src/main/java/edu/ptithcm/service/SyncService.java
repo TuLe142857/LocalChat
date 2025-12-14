@@ -2,8 +2,12 @@ package edu.ptithcm.service;
 
 import edu.ptithcm.cache.Cache;
 import edu.ptithcm.model.*;
-import edu.ptithcm.network.core.ConnectionPool;
+import edu.ptithcm.network.connection.ConnectionPool;
 import edu.ptithcm.network.packet.*;
+import edu.ptithcm.network.packet.payload.FetchMessageRequestPayload;
+import edu.ptithcm.network.packet.payload.FetchMessageResponsePayload;
+import edu.ptithcm.network.packet.payload.SyncMetadataRequestPayload;
+import edu.ptithcm.network.packet.payload.SyncMetadataResponsePayload;
 import edu.ptithcm.util.JsonUtils;
 import org.tinylog.Logger;
 
@@ -103,19 +107,6 @@ public class SyncService {
                     )
                 );
             }
-//            for (var participant : ((GroupConversation) conv).getParticipantList()){
-//                if(participant.getId().equals(request.getSenderId())){
-//                    groupConversationInfoList.add(
-//                            new SyncMetadataResponsePayload.GroupConversationInfo(
-//                                    conv.getId(),
-//                                    conv.getName(),
-//                                    conv.getLamportClock(),
-//                                    ((GroupConversation) conv).getParticipantList()
-//                            )
-//                    );
-//                    break;
-//                }
-//            }
         }
 
         // SEND
@@ -357,13 +348,24 @@ public class SyncService {
             return;
         }
         for(var message:response.getMessages()){
-            conversation.onReceiveMessage(message);
+            // verify signature
+            Peer messageSender = Cache.getInstance().getPeer(message.getSenderId());
+            if(messageSender == null){
+                Logger.warn("Sync message got null sender");
+                continue;
+            }
+            if(message.verify(messageSender.getPublicKey())){
+                conversation.onReceiveMessage(message);
+            }else{
+                Logger.warn("Sync message verify signature failed");
+                continue;
+            }
         }
 
         // try fetch more message if possible
         Message firstMessage = conversation.getSuccessMessage().getFirst();
         if(firstMessage != null && firstMessage.getLamportClock() > 1){
-            requestFetchMessageDirectConversation(conversation.getId(), firstMessage.getLamportClock(), 50);
+            requestFetchMessageDirectConversation(conversation.getId(), firstMessage.getLamportClock()-1, 50);
         }
     }
 }

@@ -1,12 +1,9 @@
-package edu.ptithcm.network.core;
+package edu.ptithcm.network.connection;
 
-import edu.ptithcm.bus.MessageBus;
-import edu.ptithcm.bus.event.MessageReceivedEvent;
-import edu.ptithcm.bus.event.MessageSendSuccessEvent;
-import edu.ptithcm.model.Credential;
 import edu.ptithcm.model.Message;
 import edu.ptithcm.network.packet.*;
 import edu.ptithcm.model.Peer;
+import edu.ptithcm.network.packet.payload.*;
 import edu.ptithcm.security.CryptoUtils;
 import edu.ptithcm.service.ChatService;
 import edu.ptithcm.service.SyncService;

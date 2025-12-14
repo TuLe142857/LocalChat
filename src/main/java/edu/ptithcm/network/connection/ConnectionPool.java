@@ -1,10 +1,10 @@
-package edu.ptithcm.network.core;
+package edu.ptithcm.network.connection;
 
 
 import edu.ptithcm.cache.Cache;
 import edu.ptithcm.model.Peer;
-import edu.ptithcm.network.NetworkService;
 import edu.ptithcm.network.packet.NetworkPacket;
+import edu.ptithcm.network.service.HandshakeService;
 import org.tinylog.Logger;
 
 import javax.crypto.SecretKey;
@@ -43,14 +43,13 @@ public class ConnectionPool {
     }
     private void scanAndRemoveConnection(){
         long now = System.currentTimeMillis();
-        long timeout = 10000; // 10 giây không thấy heartbeat -> đóng
-        Logger.info("Check HearBeat");
-        // Duyệt qua tất cả kết nối trong pool
+        long timeout = 10000;
+
         for (var entry : pool.entrySet()) {
             String peerId = entry.getKey();
             PeerConnection conn = entry.getValue();
 
-            // 1. Kiểm tra timeout
+            // check
             if (now - conn.getLastHeartbeat() > timeout) {
                 Logger.info("Peer " + conn.getPeer().getName() + " timed out. Closing connection.");
                 conn.close();
@@ -58,7 +57,7 @@ public class ConnectionPool {
                 continue;
             }
 
-            // 2. Gửi Heartbeat (Ping)
+            // ping
             try {
                 NetworkPacket heartbeatPacket = new NetworkPacket(NetworkPacket.PacketType.HEART_BEAT, "");
                 conn.sendNetworkPacket(heartbeatPacket);
@@ -74,10 +73,6 @@ public class ConnectionPool {
     public static ConnectionPool getInstance(){
         return  instance;
     }
-
-//    public PeerConnection getConnection(String peerId){
-//        return pool.get(peerId);
-//    }
 
     /**
      * Hàm quan trọng nhất: Lấy kết nối có sẵn HOẶC tự mở kết nối mới.
@@ -101,12 +96,19 @@ public class ConnectionPool {
                     if (Thread.currentThread().isInterrupted())
                         throw new InterruptedException("Handshake cancelled");
                     // Gọi logic thực hiện handshake (được implement ở NetworkService hoặc tách ra class riêng)
-                    PeerConnection newConn = NetworkService.performOutgoingHandshake(targetPeer);
+                    PeerConnection newConn = HandshakeService.performOutgoingHandshake(targetPeer);
 
                     // Handshake thành công
-                    pool.put(peerId, newConn);
-                    future.complete(newConn);
-
+                    PeerConnection existing = pool.putIfAbsent(peerId, newConn);
+                    if (existing != null) {
+                        // Đã có kết nối khác (do addIncomingConnection thêm vào)
+                        // Đóng kết nối outgoing thừa này đi
+                        newConn.close();
+                        future.complete(existing);
+                    } else {
+                        // Chưa có, thêm thành công
+                        future.complete(newConn);
+                    }
                 } catch (Exception e) {
                     future.completeExceptionally(e);
                 } finally {
@@ -119,10 +121,15 @@ public class ConnectionPool {
         });
     }
 
+    /**
+     *
+     * @param peer
+     * @param socket
+     * @param sessionKey
+     * @return true if add success, else false
+     */
     public boolean addIncomingConnection(Peer peer, Socket socket, SecretKey sessionKey) {
         if (pool.containsKey(peer.getId())) {
-            // Đã có kết nối rồi -> từ chối kết nối mới này
-            // (Hoặc logic phức tạp hơn: so sánh ID để quyết định giữ cái nào)
             return false;
         }
 
