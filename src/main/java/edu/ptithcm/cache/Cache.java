@@ -47,6 +47,7 @@ public class Cache {
         pendingMessage.clear();
     }
 
+
     public Peer getMyPeer(){
         return new Peer(credential, ip, port);
     }

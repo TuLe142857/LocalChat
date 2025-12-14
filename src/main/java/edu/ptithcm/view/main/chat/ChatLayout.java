@@ -1,47 +1,92 @@
 package edu.ptithcm.view.main.chat;
 
+import edu.ptithcm.cache.Cache;
+import edu.ptithcm.model.Conversation;
+import edu.ptithcm.model.DirectConversation;
+import edu.ptithcm.model.Peer;
 import edu.ptithcm.view.base.BaseView;
+import javafx.application.Platform;
 import javafx.scene.control.SplitPane;
+import org.tinylog.Logger;
 
 public class ChatLayout extends BaseView {
 
+    private ChatListView chatList;
+    private ChatBoxView chatBox;
+
+    // Giữ lại constructor cũ để MainLayout không bị lỗi (tương thích Master branch)
+    public ChatLayout() {
+        this(null);
+    }
+
+    // Constructor mới để nhận Consumer từ MainLayout
+    public ChatLayout(Object ignored) {
+    }
+
+
     @Override
     protected void init() {
-
+        chatList = new ChatListView(this::handleConversationSelected);
+        chatBox = new ChatBoxView();
     }
 
     @Override
     protected void setupUI() {
-        // Bên trái: Danh sách người dùng
-        // Bên phải: Khung chat
-        // (Bạn có thể tách 2 cái này ra thành ChatListPart và ChatBoxPart nếu phức tạp)
-
-        BaseView chatList = new ChatListView(); // Component con
-        BaseView chatBox = new ChatBoxView();   // Component con
-
         SplitPane splitPane = new SplitPane();
         splitPane.getItems().addAll(chatList, chatBox);
-        splitPane.setDividerPositions(0.3f); // 30% cho list
-
+        splitPane.setDividerPositions(0.3f);
         this.getChildren().add(splitPane);
     }
 
-    @Override
-    public void loadData() {
-        // ChatLayout là container nên có thể không load data,
-        // để 2 thằng con (List, Box) tự load.
+    private void handleConversationSelected(Conversation conv) {
+        if(conv != null) {
+            Platform.runLater(() -> {
+                chatBox.setActiveConversation(conv);
+            });
+        }
     }
 
-    @Override
-    public void setupEventBus() {
-        // Subscribe các sự kiện chung nếu cần
+    /**
+     * Khởi tạo cuộc trò chuyện trực tiếp (Được gọi từ SearchView)
+     */
+    public void startDirectChat(Peer peer) {
+        // 1. Tìm Conversation đã có
+        // ID của DirectConversation là ID của Peer đối tác
+        Conversation conv = Cache.getInstance().getConversation(peer.getId());
+
+        if (conv == null) {
+            // 2. Tạo Conversation mới nếu chưa có
+            Logger.info("Creating new DirectConversation for Peer: " + peer.getName());
+            conv = new DirectConversation(peer);
+            Cache.getInstance().addConversation(conv);
+
+            // Cần tải lại dữ liệu danh sách chat để hiển thị Conversation mới
+            chatList.loadData();
+        }
+
+        final Conversation finalConv = conv;
+        Platform.runLater(() -> {
+            // 3. Chọn Conversation vừa tạo/tìm thấy trong ChatListView
+            chatList.conversationListView.getSelectionModel().select(finalConv);
+
+            // 4. Hiển thị nội dung trong ChatBox (Thao tác select(finalConv) ở trên sẽ kích hoạt)
+            // chatBox.setActiveConversation(finalConv);
+        });
     }
 
-    @Override
-    public void onRemove() {
+    @Override public void loadData() {
+        chatList.loadData();
+        chatBox.loadData();
+    }
+
+    @Override public void setupEventBus() {
+        chatBox.setupEventBus();
+        chatList.setupEventBus();
+    }
+
+    @Override public void onRemove() {
         super.onRemove();
-        // Khi remove Layout cha, phải đảm bảo các view con cũng được dọn dẹp
-        // JavaFX không tự gọi onRemove cho con, ta phải tự gọi nếu cần thiết
-        // (Hoặc để các view con tự handle khi chúng bị gỡ khỏi Scene graph nếu dùng listener)
+        chatList.onRemove();
+        chatBox.onRemove();
     }
 }

@@ -1,5 +1,6 @@
 package edu.ptithcm.view.main;
 
+import edu.ptithcm.model.Peer;
 import edu.ptithcm.view.base.BaseView;
 import edu.ptithcm.view.main.chat.ChatLayout;
 import edu.ptithcm.view.main.search.SearchView;
@@ -8,61 +9,78 @@ import javafx.scene.layout.BorderPane;
 public class MainLayout extends BaseView {
 
     private BorderPane rootLayout;
-    private BaseView currentContentView; // Để gọi onRemove khi switch tab
+    private BaseView currentContentView;
     private Runnable onLogoutRequest;
+
+    private ChatLayout chatLayoutInstance;
+
     public MainLayout(Runnable onLogoutRequest){
         this.onLogoutRequest = onLogoutRequest;
     }
 
-    @Override
-    protected void init() {
+    public MainLayout() {
+        this(null);
+    }
 
+    @Override protected void init() {
+        chatLayoutInstance = new ChatLayout(null);
     }
 
     @Override
     protected void setupUI() {
         rootLayout = new BorderPane();
 
-        // Tạo Sidebar và truyền callback xử lý khi user click menu
         SidebarView sidebar = new SidebarView(this::switchContent);
 
         rootLayout.setLeft(sidebar);
 
-        // Mặc định hiện Chat
         switchContent("CHAT");
 
         this.getChildren().add(rootLayout);
     }
 
-    // Hàm chuyển đổi nội dung ở giữa (Content Bar)
+    // Callback truyền vào SearchView. Hàm này là Consumer<Peer>
+    private void startDirectChatFromSearch(Peer peer) {
+        switchContent("CHAT");
+
+        if (chatLayoutInstance != null) {
+            chatLayoutInstance.startDirectChat(peer);
+        }
+    }
+
+
     private void switchContent(String viewName) {
-        // 1. Dọn dẹp view cũ (QUAN TRỌNG: Unsubscribe Message Bus)
         if (currentContentView != null) {
             currentContentView.onRemove();
         }
 
-        // 2. Tạo view mới
         switch (viewName) {
             case "CHAT":
-                currentContentView = new ChatLayout();
+                currentContentView = chatLayoutInstance;
                 break;
             case "SEARCH":
-                currentContentView = new SearchView(); // Giả sử đã tạo class này
-                break;
-            case "SETTING":
-                // currentContentView = new SettingView();
+                // Gọi constructor của SearchView bằng lambda (Consumer<Peer>)
+                currentContentView = new SearchView(this::startDirectChatFromSearch);
                 break;
             case "LOGOUT":
-                onLogoutRequest.run();
-                break;
+                if(onLogoutRequest != null) onLogoutRequest.run();
+                return;
             default:
                 return;
         }
 
-        // 3. Gắn vào Center
+        currentContentView.loadData();
+
         rootLayout.setCenter(currentContentView);
     }
 
     @Override public void loadData() {}
     @Override public void setupEventBus() {}
+
+    @Override public void onRemove() {
+        super.onRemove();
+        if (chatLayoutInstance != null) {
+            chatLayoutInstance.onRemove();
+        }
+    }
 }

@@ -70,6 +70,7 @@ public class PeerConnection {
         byte []buf = encryptedJson.getBytes(StandardCharsets.UTF_8);
         dataOutputStream.writeInt(buf.length);
         dataOutputStream.write(buf);
+        dataOutputStream.flush();
     }
 
     // when get a message, send to message bus

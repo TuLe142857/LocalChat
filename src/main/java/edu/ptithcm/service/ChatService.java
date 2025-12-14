@@ -4,8 +4,10 @@ import edu.ptithcm.bus.MessageBus;
 import edu.ptithcm.bus.event.MessageReceivedEvent;
 import edu.ptithcm.bus.event.MessageSendFailedEvent;
 import edu.ptithcm.bus.event.MessageSendSuccessEvent;
+import edu.ptithcm.bus.event.MessageSendingEvent; // Import mới
 
 import edu.ptithcm.cache.Cache;
+import edu.ptithcm.bus.event.MessageSendingEvent;
 import edu.ptithcm.model.*;
 import edu.ptithcm.network.core.ConnectionPool;
 import edu.ptithcm.network.core.PeerConnection;
@@ -37,7 +39,27 @@ public class ChatService {
         scheduledExecutorService.scheduleWithFixedDelay(ChatService::runCheckPendingMessageTimeout, 0, 5, TimeUnit.SECONDS);
     }
     public static void init(){
+        // [CẬP NHẬT] Thêm các Subscription cần thiết (Đã loại bỏ subscription lỗi lặp lại)
+        MessageBus.subscribe(
+                MessageSendingEvent.class,
+                messageSendingEvent -> {
+                    ChatService.sendMessage(messageSendingEvent.getMessage());
+                }
+        );
 
+        MessageBus.subscribe(
+                MessageSendSuccessEvent.class,
+                messageSendSuccessEvent -> {
+                    ChatService.onSendSuccessMessage(messageSendSuccessEvent.getMessageId(), messageSendSuccessEvent.getConversationId());
+                }
+        );
+
+        MessageBus.subscribe(
+                MessageSendFailedEvent.class,
+                messageSendFailedEvent -> {
+                    ChatService.onSendFailedMessage(messageSendFailedEvent.getMessageId(), messageSendFailedEvent.getConversationId());
+                }
+        );
     }
 
     /*====================================================================
@@ -349,22 +371,30 @@ public class ChatService {
     public static void onReceiveMessage(Message message){
         boolean isDirectChatMessage = message.getConversationId().equals(Cache.getInstance().getCredential().getId());
         String conversationId = isDirectChatMessage
-                                ? (message.getSenderId())
-                                : (message.getConversationId());
+                ? (message.getSenderId())
+                : (message.getConversationId());
         Conversation conversation = Cache.getInstance().getConversation(conversationId);
-        if(conversation == null){
+
+        // 1. Xử lý trường hợp TẠO Direct Conversation mới khi nhận tin nhắn đầu tiên
+        if(conversation == null && isDirectChatMessage){
             Peer partner = Cache.getInstance().getPeer(message.getSenderId());
             if(partner == null)
                 return;
 
-            IO.println("Create new direct conversation");
+            Logger.info("Create new direct conversation");
             DirectConversation dConversation = new DirectConversation(partner);
             Cache.getInstance().addConversation(dConversation);
-            dConversation.onReceiveMessage(message);
+            conversation = dConversation; // Gán lại conversation để xử lý tiếp
+        }
+
+        if (conversation == null) {
             return;
         }
 
+        // 2. Thêm tin nhắn vào cuộc trò chuyện (mới hoặc đã có)
         conversation.onReceiveMessage(message);
+
+        // 3. Phát sự kiện đến UI (luôn được gọi)
         MessageBus.emit(new MessageReceivedEvent(message));
 
         //send ack reply đã làm ở PeerConnection.listen();
