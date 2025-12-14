@@ -3,6 +3,7 @@ package edu.ptithcm.view.main.chat;
 import edu.ptithcm.model.GroupConversation;
 import edu.ptithcm.model.Peer;
 import edu.ptithcm.view.base.BaseView;
+import edu.ptithcm.view.main.search.PeerListItem; // CẦN IMPORT NÀY
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
@@ -22,38 +23,45 @@ public class GroupMemberView extends BaseView {
     private ListView<Peer> memberListView;
     private ObservableList<Peer> members;
     private final Stage stage;
+    private Label titleLabel;
+    private BorderPane rootLayout;
 
     public GroupMemberView(GroupConversation group) {
         this.group = group;
         this.stage = new Stage();
-    }
 
-    @Override
-    protected void init() {
-        members = FXCollections.observableArrayList(group.getParticipantList());
-
-        stage.initModality(Modality.APPLICATION_MODAL); // Chặn tương tác với cửa sổ chính
-        stage.setTitle("Group Members: " + group.getName());
+        // Setup Stage configuration
+        stage.initModality(Modality.APPLICATION_MODAL);
+        stage.setTitle("Group Members");
         stage.setResizable(false);
     }
 
     @Override
+    protected void init() {
+        members = FXCollections.observableArrayList();
+    }
+
+
+    @Override
     protected void setupUI() {
-        BorderPane root = new BorderPane();
-        root.setPadding(new Insets(10));
+        // ... (phần trên giữ nguyên)
+        rootLayout = new BorderPane();
+        rootLayout.setPadding(new Insets(10));
 
         // Top: Tiêu đề
-        Label titleLabel = new Label("Members (" + members.size() + ")");
+        titleLabel = new Label("Members");
         titleLabel.setStyle("-fx-font-size: 1.2em; -fx-font-weight: bold; -fx-padding: 0 0 10 0;");
-        root.setTop(titleLabel);
+        rootLayout.setTop(titleLabel);
         BorderPane.setAlignment(titleLabel, Pos.CENTER);
 
-        // Center: Danh sách thành viên (có thể tái sử dụng PeerListItem nếu cần)
+        // Center: Danh sách thành viên
         memberListView = new ListView<>(members);
-        // Tùy chỉnh Cell Factory nếu muốn hiển thị chi tiết hơn (hiện tại dùng toString)
-        // memberListView.setCellFactory(param -> new PeerListItem());
+        // ĐÃ SỬA: Sử dụng PeerListItem để hiển thị thông tin thân thiện hơn
+        memberListView.setCellFactory(param -> new PeerListItem());
         memberListView.setPrefSize(350, 400);
-        root.setCenter(memberListView);
+        rootLayout.setCenter(memberListView);
+
+        // ... (phần dưới giữ nguyên)
 
         // Bottom: Nút đóng
         Button closeButton = new Button("Close");
@@ -62,22 +70,30 @@ public class GroupMemberView extends BaseView {
 
         VBox bottomBox = new VBox(closeButton);
         bottomBox.setPadding(new Insets(10, 0, 0, 0));
-        root.setBottom(bottomBox);
+        rootLayout.setBottom(bottomBox);
 
-        // Thiết lập Scene và Stage
-        Scene scene = new Scene(root);
-        stage.setScene(scene);
+        // Thêm layout vào BaseView (StackPane - là 'this')
+        this.getChildren().add(rootLayout);
     }
 
     // Phương thức công khai để hiển thị cửa sổ
     public void show() {
-        // Cập nhật lại danh sách ngay trước khi hiển thị (nếu có thay đổi real-time)
+        if (stage.getScene() == null) {
+            stage.setScene(new Scene(this));
+        }
+
+        // 1. Cập nhật dữ liệu
         members.setAll(group.getParticipantList());
+
+        // 2. Cập nhật tiêu đề
+        stage.setTitle("Group Members: " + group.getName());
+        titleLabel.setText("Members (" + members.size() + ")");
+
         stage.showAndWait();
     }
 
     @Override public void loadData() {}
-    @Override public void setupEventBus() {} // Không cần thiết lập EventBus cho view modal đơn giản này
+    @Override public void setupEventBus() {}
 
     @Override
     public void onRemove() {
