@@ -389,7 +389,7 @@ public class ChatService {
         Conversation conversation = Cache.getInstance().getConversation(conversationId);
         if(conversation == null)
             return;
-        conversation.getFailedMessage()
+        conversation.getMessageList()
                 .stream()
                 .filter(m->(m.getId().equals(messageId)))
                 .findFirst()
