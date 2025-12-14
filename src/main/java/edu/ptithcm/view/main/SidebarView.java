@@ -53,23 +53,7 @@ public class SidebarView extends VBox {
         // Màu nền tối hơn, hiện đại hơn
         this.setStyle("-fx-background-color: #2c3e50; -fx-pref-width: 200;");
 
-        // 1. Account Info/Avatar Area
-        VBox profileBox = new VBox(5);
-        profileBox.setAlignment(Pos.CENTER);
-        profileBox.setPadding(new Insets(0, 0, 20, 0));
-
-        Circle avatar = new Circle(25);
-        avatar.setStyle("-fx-fill: #3498db; -fx-stroke: #ecf0f1; -fx-stroke-width: 2;");
-        Label nameLabel = new Label("My Profile");
-        nameLabel.setStyle("-fx-text-fill: #ecf0f1; -fx-font-weight: bold; -fx-font-size: 1.1em;");
-
-        // Re-aligning with original children: btnAccount, btnChat, btnSearch, btnLogout
-        Button btnAccount = new Button("Account Info");
-        styleButton(btnAccount, "\uD83D\uDC64"); // Icon: Person
-        btnAccount.setMaxWidth(Double.MAX_VALUE);
-        btnAccount.setAlignment(Pos.CENTER_LEFT);
-        btnAccount.setStyle("-fx-background-color: transparent; -fx-text-fill: #ecf0f1; -fx-font-weight: bold; -fx-padding: 10 15 10 15;");
-
+        // KHU VỰC ACCOUNT INFO ĐÃ ĐƯỢC BỎ
 
         // Menu Items
         Button btnChat = new Button("Chat");
@@ -88,6 +72,7 @@ public class SidebarView extends VBox {
         btnLogout.setOnAction(e->onMenuSelected.accept("LOGOUT"));
         VBox.setMargin(btnLogout, new Insets(10, 0, 10, 0));
 
-        this.getChildren().addAll(btnAccount, btnChat, btnSearch, spacer, btnLogout);
+        // CHỈ GIỮ LẠI CÁC NÚT CẦN THIẾT
+        this.getChildren().addAll(btnChat, btnSearch, spacer, btnLogout);
     }
 }

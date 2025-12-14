@@ -9,14 +9,62 @@ import javafx.scene.text.Font;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class UIUtils {
 
-    // Bộ ánh xạ cho các biểu tượng cảm xúc tùy chỉnh
-    private static final Pattern EMOJI_PATTERN = Pattern.compile("(:v|:\\)|:\\)\\)|:D|:\\(|:'\\(|<3|:O|:P|T_T)");
+    // Bộ ánh xạ cho các biểu tượng cảm xúc tùy chỉnh (ĐƯỢC SỬ DỤNG CHO CẢ INPUT VÀ DISPLAY)
+    // LinkedHashMap để đảm bảo thứ tự
+    private static final Map<String, String> EMOJI_MAP = new LinkedHashMap<>() {{
+        put(":v", "😅");
+        put(":)", "😊");
+        put(":))", "😄");
+        put(":D", "😀");
+        put(":(", "😞");
+        put(":'(", "😢");
+        put("<3", "❤️");
+        put(":O", "😮");
+        put(":P", "😛");
+        put("T_T", "😭");
+    }};
+
+    // Pattern regex được tạo tự động từ các key của map
+    private static final Pattern EMOJI_PATTERN = Pattern.compile(
+            EMOJI_MAP.keySet().stream()
+                    .map(Pattern::quote) // Escape special characters
+                    .collect(Collectors.joining("|"))
+    );
+
     private static final String EMOJI_FONT_SIZE = "-fx-font-size: 1.2em;";
+
+    /**
+     * Trả về danh sách các ký tự emoji (Unicode) cho bảng chọn.
+     */
+    public static List<String> getEmojiList() {
+        return new ArrayList<>(EMOJI_MAP.values());
+    }
+
+    /**
+     * Chuyển đổi mã văn bản thành biểu tượng cảm xúc (Dùng cho Live Input).
+     * @param text Chuỗi văn bản đầu vào
+     * @return Chuỗi văn bản đã chuyển đổi
+     */
+    public static String convertTextToEmojiLive(String text) {
+        String convertedText = text;
+        // Lặp qua tất cả các mã trong EMOJI_MAP và thay thế
+        for (Map.Entry<String, String> entry : EMOJI_MAP.entrySet()) {
+            // Thay thế tất cả các lần xuất hiện của mã thành emoji
+            convertedText = convertedText.replace(entry.getKey(), entry.getValue());
+        }
+        return convertedText;
+    }
+
 
     /**
      * Tạo icon hiển thị trạng thái tin nhắn.
@@ -72,7 +120,8 @@ public class UIUtils {
 
             // 2. Thêm biểu tượng cảm xúc
             String emojiText = matcher.group();
-            Text emojiNode = new Text(mapTextToEmoji(emojiText));
+            // Lấy emoji từ Map
+            Text emojiNode = new Text(EMOJI_MAP.getOrDefault(emojiText, emojiText));
             emojiNode.setStyle(EMOJI_FONT_SIZE); // Làm cho emoji nổi bật hơn
             textFlow.getChildren().add(emojiNode);
 
@@ -86,37 +135,5 @@ public class UIUtils {
         }
 
         return textFlow;
-    }
-
-    /**
-     * Ánh xạ chuỗi ký tự thành ký tự Unicode Emoji.
-     * @param text
-     * @return
-     */
-    private static String mapTextToEmoji(String text) {
-        switch (text) {
-            case ":v":
-                return "😅";
-            case ":)":
-                return "😊";
-            case ":))":
-                return "😄";
-            case ":D":
-                return "😀";
-            case ":(":
-                return "😞";
-            case ":'(":
-                return "😢";
-            case "<3":
-                return "❤️";
-            case ":O":
-                return "😮";
-            case ":P":
-                return "😛";
-            case "T_T":
-                return "😭";
-            default:
-                return text;
-        }
     }
 }
