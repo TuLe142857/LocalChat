@@ -5,10 +5,11 @@ import edu.ptithcm.bus.event.MessageReceivedEvent;
 import edu.ptithcm.bus.event.MessageSendSuccessEvent;
 import edu.ptithcm.cache.Cache;
 import edu.ptithcm.model.Message;
-import edu.ptithcm.network.packet.MessageAckPayload;
-import edu.ptithcm.network.packet.NetworkPacket;
+import edu.ptithcm.network.packet.*;
 import edu.ptithcm.model.Peer;
 import edu.ptithcm.security.CryptoUtils;
+import edu.ptithcm.service.ChatService;
+import edu.ptithcm.service.SyncService;
 import edu.ptithcm.util.JsonUtils;
 import org.tinylog.Logger;
 import edu.ptithcm.network.packet.MessagePayload; // Import mới
@@ -73,36 +74,22 @@ public class PeerConnection {
         dataOutputStream.flush(); // Ensure data is sent immediately
     }
 
-    // [NEW METHOD]: Handle incoming NetworkPacket and decrypt
-    private NetworkPacket receiveNetworkPacket() throws IOException {
-        int length = dataInputStream.readInt();
-        if (length <= 0) {
-            Logger.error("Invalid length of network packet received: " + length);
-            throw new IOException("Invalid packet length");
-        }
-
-        byte [] buf = new byte[length];
-        dataInputStream.readFully(buf);
-
-        String encryptedJson = new String(buf, StandardCharsets.UTF_8);
-        String plainJson = CryptoUtils.decryptAES(encryptedJson, this.sessionKey);
-        if (plainJson == null) {
-            Logger.error("Failed to decrypt incoming packet.");
-            throw new IOException("Decryption failed");
-        }
-
-        NetworkPacket networkPacket = JsonUtils.fromJson(plainJson, NetworkPacket.class);
-        return networkPacket;
-    }
-
-
     // when get a message, send to message bus
     private void listen(){
         running = true;
         try{
             while(running){
-                NetworkPacket networkPacket = receiveNetworkPacket();
+                int length = dataInputStream.readInt();
+                if (length < 0){
+                    Logger.error("Invalid length of network packet received");
+                    throw new IOException("Invalid length");
+                }
+                byte [] buf = new byte[length];
+                dataInputStream.readFully(buf);
 
+                String encryptedJson = new String(buf, StandardCharsets.UTF_8);
+                String plainJson = CryptoUtils.decryptAES(encryptedJson, this.sessionKey);
+                NetworkPacket networkPacket = JsonUtils.fromJson(plainJson, NetworkPacket.class);
                 Logger.debug(
                         String.format(
                                 "Get NetworkPacket type = %s from %s through %s",
@@ -115,32 +102,39 @@ public class PeerConnection {
                 if(networkPacket.getPacketType() == NetworkPacket.PacketType.HEART_BEAT){
                     this.lastHeartbeat = System.currentTimeMillis();
                 }else if(networkPacket.getPacketType() == NetworkPacket.PacketType.MESSAGE){
-                    // SỬA: Dùng MessagePayload để đọc gói tin
-                    MessagePayload payload = networkPacket.getPayloadAs(MessagePayload.class);
-
-                    // 1. Tạo đối tượng Message từ Payload
-                    // ConversationId của tin nhắn Direct Chat đến (Host 2) là ID của Host 1 (Peer đối tác)
-                    Message message = new Message(
-                            peer.getId(), // Conversation ID = Peer ID của đối tác
-                            payload.getSenderId(),
-                            payload.getContent(),
-                            payload.getLamportClock()
-                    );
-
-                    // 2. Phát sự kiện cho ChatService xử lý (tạo Conversation và thêm Message)
+                    Message message = networkPacket.getPayloadAs(Message.class);
                     MessageBus.emit(new MessageReceivedEvent(message));
 
-                    // 3. Gửi lại ACK
-                    MessageAckPayload messageAckPayload = new MessageAckPayload(peer.getId(), Cache.getInstance().getCredential().getId(), message.getLamportClock());
+                    // gởi lại ack
+                    MessageAckPayload messageAckPayload = new MessageAckPayload(message.getId(), message.getConversationId());
                     NetworkPacket ackPacket = new NetworkPacket(NetworkPacket.PacketType.MESSAGE_ACK, JsonUtils.toJson(messageAckPayload));
-                    sendNetworkPacket(ackPacket);
-
+                    this.sendNetworkPacket(ackPacket);
                 }else if(networkPacket.getPacketType() == NetworkPacket.PacketType.MESSAGE_ACK){
-                    // SỬA: Dùng MessageAckPayload để đọc gói tin
-                    MessageAckPayload payload = networkPacket.getPayloadAs(MessageAckPayload.class);
-                    // Phát sự kiện cho ChatService xử lý (tìm Message và cập nhật trạng thái)
-                    MessageBus.emit(new MessageSendSuccessEvent(payload.getLamportClock(), payload.getConversationId()));
-                }else{
+                    MessageAckPayload messageAckPayload = networkPacket.getPayloadAs(MessageAckPayload.class);
+                    MessageBus.emit(new MessageSendSuccessEvent(messageAckPayload.getMessageId(), messageAckPayload.getConversationId()));
+                }
+                else if(networkPacket.getPacketType() == NetworkPacket.PacketType.SYNC_METADATA_REQUEST){
+                    SyncService.handleSyncMetadataRequest(networkPacket.getPayloadAs(SyncMetadataRequestPayload.class));
+                }
+                else if(networkPacket.getPacketType() == NetworkPacket.PacketType.SYNC_METADATA_RESPONSE){
+                    SyncService.handleSyncMetadataResponse(networkPacket.getPayloadAs(SyncMetadataResponsePayload.class));
+                }
+                else if(networkPacket.getPacketType() == NetworkPacket.PacketType.FETCH_MESSAGE_REQUEST){
+                    SyncService.handleFetchMessageRequest(networkPacket.getPayloadAs(FetchMessageRequestPayload.class));
+                }
+                else if(networkPacket.getPacketType() == NetworkPacket.PacketType.FETCH_MESSAGE_RESPONSE){
+                    SyncService.handleFetchMessageResponse(networkPacket.getPayloadAs(FetchMessageResponsePayload.class));
+                }
+                else if(networkPacket.getPacketType() == NetworkPacket.PacketType.GROUP_INVITE){
+                    ChatService.handleGroupInvite(networkPacket.getPayloadAs(GroupInvitePayload.class));
+                }
+                else if(networkPacket.getPacketType() == NetworkPacket.PacketType.GROUP_INVITE_ACK){
+                    ChatService.handleGroupInviteAck(networkPacket.getPayloadAs(GroupInviteAckPayload.class));
+                }
+                else if(networkPacket.getPacketType() == NetworkPacket.PacketType.GROUP_UPDATE){
+                    ChatService.handleGroupUpdatePayload(networkPacket.getPayloadAs(GroupUpdatePayload.class));
+                }
+                else{
                     Logger.warn("Unexpected NetworkPacket type to PeerConnection " + peer.getId() +" : " + networkPacket.getPacketType());
                 }
             }
@@ -154,6 +148,7 @@ public class PeerConnection {
         }
         catch (Exception e){
             if(running)
+//                e.printStackTrace();
                 Logger.error(e);
         }
 

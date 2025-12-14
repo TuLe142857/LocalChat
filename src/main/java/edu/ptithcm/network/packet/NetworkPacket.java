@@ -4,7 +4,6 @@ import edu.ptithcm.util.JsonUtils;
 
 import java.net.DatagramPacket;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 
 /**
  * NetworkPacket: data to transfer on network
@@ -14,13 +13,24 @@ import java.time.Instant;
 public class NetworkPacket {
     public static enum PacketType{
         DISCOVER,
+
         HANDSHAKE,
         HANDSHAKE_ACK,
+
         MESSAGE,
         MESSAGE_ACK,
-        SYNC,
-        SYNC_ACK,
-        HEART_BEAT
+
+        GROUP_INVITE,
+        GROUP_INVITE_ACK,
+        GROUP_UPDATE,
+
+        SYNC_METADATA_REQUEST, //payload empty
+        SYNC_METADATA_RESPONSE,
+
+        FETCH_MESSAGE_REQUEST,
+        FETCH_MESSAGE_RESPONSE,
+
+        HEART_BEAT //payload empty
     }
     private final PacketType packetType;
     private final String payload;

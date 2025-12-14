@@ -1,10 +1,10 @@
 package edu.ptithcm;
 
 import edu.ptithcm.bus.MessageBus;
-import edu.ptithcm.bus.event.MessageSendingEvent;
 import edu.ptithcm.cache.Cache;
 import edu.ptithcm.model.*;
 import edu.ptithcm.network.NetworkService;
+import edu.ptithcm.security.CredentialManager;
 import edu.ptithcm.security.CryptoUtils;
 import edu.ptithcm.service.AuthService;
 import edu.ptithcm.service.ChatService;
@@ -12,6 +12,7 @@ import edu.ptithcm.util.JsonUtils;
 import edu.ptithcm.util.LogConfig;
 
 import java.net.InetAddress;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -19,6 +20,9 @@ public class Cli {
     static Map<String, Consumer<String[]>> commandHandler = Map.of(
             "cache", Cli::showCache,
             "chat", Cli::chat,
+            "create-group", Cli::create_group,
+            "invite-group", Cli::invite_group,
+            "leave-group", Cli::leave_group,
             "exit", Cli::exit,
             "help", Cli::help
     );
@@ -27,13 +31,20 @@ public class Cli {
     static void main() throws Exception{
         LogConfig.config(false, true);
 
-        IO.println("Hello, code ui ko kịp test đỡ bằng terminal");
-        IO.println("Mới chat 1-1 thôi, chat nhóm chưa xong");
-        String name = IO.readln("Your name: ");
+        Credential credential = CredentialManager.readStoredCredential();
+        if(
+                credential == null
+                || (IO.readln("Found Stored Credential, login with this credential?(y/n) ").toLowerCase().equals("n"))
+        ){
+            String name = IO.readln("Your name: ");
+            credential = new Credential(CryptoUtils.generateRSAKeyPair(), name);
+        }else{
+            IO.println("Name: " + credential.getName());
+        }
+
         InetAddress ip = InetAddress.getByName(IO.readln("ip: "));
         int port = Integer.parseInt(IO.readln("Port: "));
 
-        Credential credential = new Credential(CryptoUtils.generateRSAKeyPair(), name);
         AuthService.login(credential, ip, port);
         ChatService.init();
         networkService = new NetworkService(ip, port);
@@ -76,57 +87,80 @@ public class Cli {
 
         IO.println("Conversation list:");
         for (var c : Cache.getInstance().getConversationList()){
-            IO.println("Id: " + c.getId());
-            IO.println("Name: " + c.getName());
-            IO.println("Type: " + ((c instanceof DirectConversation)?("DirectConversation"):("GroupConversation")));
-            if(c instanceof GroupConversation){
-                GroupConversation g = (GroupConversation)(c);
-                IO.println("Number of participants: " + g.getParticipantList().size());
-            }
-            else{
-                DirectConversation d = (DirectConversation) (c);
-                IO.println("Partner Id: " + d.getPartner().getId());
-            }
-            IO.println("Number of success message: " + c.getSuccessMessage().size());
-            IO.println("Number of pending message: " + c.getPendingMessage().size());
-            IO.println("Number of send failed message: " + c.getFailedMessage().size());
-            IO.println();
+            printConversationDetail(c, false);
         }
     }
 
     static void chat(String []args){
-        String peerId = args[1];
-        IO.println("Chat with peer id: "+ args[1]);
-        Peer partner = Cache.getInstance().getPeer(peerId);
-        if(partner == null){
-            IO.println("Peer null");
+        String conversation_id =  IO.readln("Conversation id: ");
+        boolean isDirectConversation = (Cache.getInstance().getPeer(conversation_id) != null);
+
+        Conversation conversation = Cache.getInstance().getConversation(conversation_id);
+
+
+        if(conversation == null && isDirectConversation){
+            conversation = new DirectConversation(Cache.getInstance().getPeer(conversation_id));
+            Cache.getInstance().addConversation(conversation);
+            IO.println("\tCreate direct conversation to peer "+ conversation_id);
+        }
+        if(conversation == null){
+            IO.println("No conversation match id "+ conversation_id);
             return;
         }
-
-        Conversation conversation = Cache.getInstance().getConversation(peerId);
-        if(conversation == null){
-            conversation = new DirectConversation(partner);
-            Cache.getInstance().addConversation(conversation);
-            IO.println("<Create new conversation>");
+        while (true){
+            printConversationDetail(conversation, true);
+            String content = IO.readln("\nType message to send(or enter to exit): \n");
+            if(content.isEmpty())
+                break;
+            Message message = conversation.createMessage(content);
+            ChatService.sendMessage(message);
         }
-        else{
-            IO.println("<message in this conversation>");
-            for(var m:conversation.getSuccessMessage()){
-                if(m.getSenderId().equals(Cache.getInstance().getCredential().getId())){
-                    IO.println("You: " +m.getContent());
-                }
-                else {
-                    IO.println(partner.getName() + ": " + m.getContent());
-                }
+    }
 
-
+    static void create_group(String []args){
+        String gName = IO.readln("Group name: ");
+        ArrayList<String> invitedPeerId = new ArrayList<>();
+        while(true){
+            String pid =IO.readln("Add peer to group(type id or enter to skip):");
+            if(pid.isEmpty()){
+                break;
+            }else{
+                invitedPeerId.add(pid);
             }
-            IO.println("<--------------------->");
         }
+        GroupConversation groupConversation = ChatService.createGroupConversation(gName, invitedPeerId);
+        IO.println("Created new group with id = " + groupConversation.getId());
+        IO.println("The selected peer was pending invited, group member will update when they're accept your invitation");
+    }
 
-        String content = IO.readln(">> Message: ");
-        Message message = conversation.createMessage(content);
-        MessageBus.emit(new MessageSendingEvent(message));
+    static void invite_group(String []args){
+        String gId = IO.readln("Group Id");
+        Conversation conversation = Cache.getInstance().getConversation(gId);
+        if(!(conversation instanceof GroupConversation)){
+            IO.println("Invalid Group ID");
+            return;
+        }
+        ArrayList<String> invitedPeerId = new ArrayList<>();
+        while(true){
+            String pid =IO.readln("Add peer to group(type id or enter to skip):");
+            if(pid.isEmpty()){
+                break;
+            }else{
+                invitedPeerId.add(pid);
+            }
+        }
+        for(String pId : invitedPeerId){
+            ChatService.invitePeerToGroup(gId, pId);
+        }
+    }
+
+    static void leave_group(String []args){
+        String group_id = IO.readln("Group id: ");
+        Conversation conversation = Cache.getInstance().getConversation(group_id);
+        if(!(conversation instanceof GroupConversation)){
+            return;
+        }
+        ChatService.leaveGroup(group_id);
     }
 
     static void help(String []args){
@@ -139,5 +173,38 @@ public class Cli {
     static void exit(String []args){
         networkService.stop();
         System.exit(0);
+    }
+
+    static void printConversationDetail(Conversation c, boolean showMessageDetail){
+        IO.println("Id: " + c.getId());
+        IO.println("Name: " + c.getName());
+        IO.println("Type: " + ((c instanceof DirectConversation)?("DirectConversation"):("GroupConversation")));
+
+        if(c instanceof GroupConversation){
+            GroupConversation g = (GroupConversation)(c);
+            IO.println("Number of participants: " + g.getParticipantList().size());
+
+        }
+        else {
+            DirectConversation d = (DirectConversation) (c);
+            IO.println("Partner Id: " + d.getPartner().getId());
+        }
+        IO.println("Number of success message: " + c.getSuccessMessage().size());
+        IO.println("Number of pending message: " + c.getPendingMessage().size());
+        IO.println("Number of send failed message: " + c.getFailedMessage().size());
+        if(showMessageDetail){
+            IO.println("--Message in this conversation--");
+            for(var m:c.getSuccessMessage()){
+                if(m.getSenderId().equals(Cache.getInstance().getCredential().getId())){
+                    IO.println("You: " +m.getContent());
+                }
+                else {
+                    IO.println(Cache.getInstance().getPeer(m.getSenderId()).getName() + ": " + m.getContent());
+                }
+            }
+            IO.println("--------------------------------");
+        }
+
+
     }
 }

@@ -1,17 +1,24 @@
 package edu.ptithcm.network.packet;
 
-public class MessageAckPayload {
-    private String conversationId;
-    private String ackSenderId;
-    private long lamportClock;
+import edu.ptithcm.security.Signable;
 
-    // GSON required no-args constructor
-    public MessageAckPayload() {}
+/**
+ * Thông báo bên kia biết đã nhận được tin nhắn
+ * Gói tin thông quan trọng, không cần xác thực bằng chữ ký số
+ */
+public class MessageAckPayload{
+    private final String messageId;
+    private final String conversationId;
+    private final long timestamp;
 
-    public MessageAckPayload(String conversationId, String ackSenderId, long lamportClock) {
+    public MessageAckPayload(String messageId, String conversationId) {
+        this.messageId = messageId;
         this.conversationId = conversationId;
-        this.ackSenderId = ackSenderId;
-        this.lamportClock = lamportClock;
+        this.timestamp = System.currentTimeMillis();
+    }
+
+    public String getMessageId() {
+        return messageId;
     }
 
     // Getters
@@ -19,11 +26,7 @@ public class MessageAckPayload {
         return conversationId;
     }
 
-    public String getAckSenderId() {
-        return ackSenderId;
-    }
-
-    public long getLamportClock() {
-        return lamportClock;
+    public long getTimestamp() {
+        return timestamp;
     }
 }

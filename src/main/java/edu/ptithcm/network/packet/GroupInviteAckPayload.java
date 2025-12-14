@@ -2,14 +2,15 @@ package edu.ptithcm.network.packet;
 
 import edu.ptithcm.security.Signable;
 
-public class HandshakeAckPayload implements Signable {
-    private final String senderId;
+public class GroupInviteAckPayload implements Signable {
+    private final String groupId;
+    private final String senderId; // Người được mời
     private final boolean accept;
     private final long timestamp;
-
     private String signature;
 
-    public HandshakeAckPayload(String senderId, boolean accept){
+    public GroupInviteAckPayload(String groupId, String senderId, boolean accept) {
+        this.groupId = groupId;
         this.senderId = senderId;
         this.accept = accept;
         this.timestamp = System.currentTimeMillis();
@@ -17,6 +18,10 @@ public class HandshakeAckPayload implements Signable {
 
     public String getSenderId() {
         return senderId;
+    }
+
+    public String getGroupId() {
+        return groupId;
     }
 
     public boolean isAccept() {
@@ -29,7 +34,7 @@ public class HandshakeAckPayload implements Signable {
 
     @Override
     public String getSignableData() {
-        return senderId + accept + timestamp;
+        return groupId + senderId + accept + timestamp;
     }
 
     @Override

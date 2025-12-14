@@ -1,17 +1,22 @@
 package edu.ptithcm.network.packet;
 
+import edu.ptithcm.model.Message;
 import edu.ptithcm.security.Signable;
 
-public class HandshakeAckPayload implements Signable {
-    private final String senderId;
-    private final boolean accept;
-    private final long timestamp;
+import java.util.List;
 
+public class FetchMessageResponsePayload implements Signable {
+    private final String senderId;
+    private final String conversationId;
+    private final List<Message> messages;
+
+    private final long timestamp;
     private String signature;
 
-    public HandshakeAckPayload(String senderId, boolean accept){
+    public FetchMessageResponsePayload(String senderId, String conversationId, List<Message> messages) {
         this.senderId = senderId;
-        this.accept = accept;
+        this.conversationId = conversationId;
+        this.messages = messages;
         this.timestamp = System.currentTimeMillis();
     }
 
@@ -19,8 +24,12 @@ public class HandshakeAckPayload implements Signable {
         return senderId;
     }
 
-    public boolean isAccept() {
-        return accept;
+    public String getConversationId() {
+        return conversationId;
+    }
+
+    public List<Message> getMessages() {
+        return messages;
     }
 
     public long getTimestamp() {
@@ -29,7 +38,7 @@ public class HandshakeAckPayload implements Signable {
 
     @Override
     public String getSignableData() {
-        return senderId + accept + timestamp;
+        return senderId + conversationId + timestamp;
     }
 
     @Override

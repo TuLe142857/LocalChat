@@ -1,7 +1,10 @@
 package edu.ptithcm.cache;
 
+import edu.ptithcm.bus.MessageBus;
+import edu.ptithcm.bus.event.NewConversationEvent;
 import edu.ptithcm.model.Conversation;
 import edu.ptithcm.model.Credential;
+import edu.ptithcm.model.Message;
 import edu.ptithcm.model.Peer;
 
 import java.net.InetAddress;
@@ -25,11 +28,12 @@ public class Cache {
     // chat cache
     private final ConcurrentHashMap<String, Peer> knownPeers;
     private final ConcurrentHashMap<String, Conversation> conversations;
+    private final ConcurrentHashMap<String, Set<String>> pendingInviteGroupMember;
 
     private Cache(){
         knownPeers = new ConcurrentHashMap<>();
         conversations = new ConcurrentHashMap<>();
-        lamportClock = new AtomicLong(0); // Initialize Lamport Clock
+        pendingInviteGroupMember = new ConcurrentHashMap<>();
     }
 
     public static Cache getInstance(){
@@ -65,7 +69,7 @@ public class Cache {
         port  = -1;
         knownPeers.clear();
         conversations.clear();
-        lamportClock.set(0); // Reset clock on clear
+        pendingInviteGroupMember.clear();
     }
 
     public Peer getMyPeer(){
@@ -96,11 +100,17 @@ public class Cache {
     }
 
     public void addPeer(Peer peer){
-        this.knownPeers.put(peer.getId(), peer);
+        this.knownPeers.putIfAbsent(peer.getId(), peer);
     }
 
     public void addConversation(Conversation conversation){
-        this.conversations.put(conversation.getId(), conversation);
+        if(this.conversations.putIfAbsent(conversation.getId(), conversation) == null){
+            MessageBus.emit(new NewConversationEvent(conversation.getId()));
+        }
+    }
+
+    public boolean removeConversation(String id){
+        return this.conversations.remove(id) != null;
     }
 
     public Peer getPeer(String id){
@@ -118,6 +128,31 @@ public class Cache {
     public List<Conversation> getConversationList(){
         return new ArrayList<>(this.conversations.values());
     }
+
+    public void addPendingGroupInvite(String groupId, String peerId){
+        this.pendingInviteGroupMember.computeIfAbsent(
+                groupId, k->ConcurrentHashMap.newKeySet()
+        ).add(peerId);
+    }
+
+    public Set<String> getPendingGroupInvite(String groupId) {
+        return pendingInviteGroupMember.get(groupId);
+    }
+
+    public boolean removePendingGroupInvite(String groupId, String peerId) {
+        Set<String> set = pendingInviteGroupMember.get(groupId);
+        if (set == null){
+            return false;
+        }
+
+        boolean removed = set.remove(peerId);
+
+        if (set.isEmpty()) {
+            pendingInviteGroupMember.remove(groupId, set);
+        }
+        return removed;
+    }
+
     // NEW METHOD: Get peer list for SearchView
     public List<Peer> getPeerList(){
         return new ArrayList<>(this.knownPeers.values());
