@@ -2,7 +2,7 @@ package edu.ptithcm;
 
 import edu.ptithcm.cache.Cache;
 import edu.ptithcm.network.NetworkService;
-import edu.ptithcm.network.core.ConnectionPool;
+import edu.ptithcm.network.connection.ConnectionPool;
 import edu.ptithcm.service.AuthService;
 import edu.ptithcm.service.ChatService;
 import edu.ptithcm.util.LogConfig;

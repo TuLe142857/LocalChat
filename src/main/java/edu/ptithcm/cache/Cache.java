@@ -14,12 +14,12 @@ import java.util.concurrent.ConcurrentHashMap;
 public class Cache {
     private static final Cache instance = new Cache();
 
-    // credential & ip, port
+    // USER PROFILE(credential & ip, port)
     private Credential credential;
     private InetAddress ip;
     private int port; // tcp listening port
 
-    // chat cache
+    // CHAT CACHE
     private final ConcurrentHashMap<String, Peer> knownPeers;
     private final ConcurrentHashMap<String, Conversation> conversations;
     private final ConcurrentHashMap<String, Set<String>> pendingInviteGroupMember;
@@ -47,35 +47,68 @@ public class Cache {
         pendingMessage.clear();
     }
 
-    public Peer getMyPeer(){
-        return new Peer(credential, ip, port);
-    }
+    /*====================================================================
+                            USER PROFILE
+     =====================================================================*/
+
     public Credential getCredential() {
         return credential;
-    }
-
-    public void setCredential(Credential credential) {
-        this.credential = credential;
     }
 
     public InetAddress getIp() {
         return ip;
     }
 
-    public void setIp(InetAddress ip) {
-        this.ip = ip;
-    }
-
     public int getPort() {
         return port;
+    }
+
+    public Peer getMyPeer(){
+        return new Peer(credential, ip, port);
+    }
+
+    public void setCredential(Credential credential) {
+        this.credential = credential;
+    }
+
+    public void setIp(InetAddress ip) {
+        this.ip = ip;
     }
 
     public void setPort(int port) {
         this.port = port;
     }
 
+    /*====================================================================
+                CHAT(CONVERSATION, MESSAGE, STATUS, ...)
+     =====================================================================*/
+
+    /*------------------------------------------
+        PEER IN NETWORK(NOT INCLUDE SELF PEER)
+    -------------------------------------------*/
+
+    public Peer getPeer(String id){
+        return this.knownPeers.get(id);
+    }
+
     public void addPeer(Peer peer){
         this.knownPeers.putIfAbsent(peer.getId(), peer);
+    }
+
+    public List<Peer> getPeerList(){
+        return new ArrayList<>(this.knownPeers.values());
+    }
+
+    public Set<Map.Entry<String, Peer>> getPeerEntrySet(){
+        return knownPeers.entrySet();
+    }
+
+    /*------------------------------------------
+        CONVERSATION
+    -------------------------------------------*/
+
+    public Conversation getConversation(String id){
+        return this.conversations.get(id);
     }
 
     public void addConversation(Conversation conversation){
@@ -88,24 +121,14 @@ public class Cache {
         return this.conversations.remove(id) != null;
     }
 
-    public Peer getPeer(String id){
-        return this.knownPeers.get(id);
-    }
-    public Set<Map.Entry<String, Peer>> getPeerEntrySet(){
-        return knownPeers.entrySet();
-    }
-
-    // not include self peer
-    public List<Peer> getPeerList(){
-        return new ArrayList<>(this.knownPeers.values());
-    }
-
-    public Conversation getConversation(String id){
-        return this.conversations.get(id);
-    }
     public List<Conversation> getConversationList(){
         return new ArrayList<>(this.conversations.values());
     }
+
+    /*------------------------------------------
+        PENDING INVITE GROUP MEMBER (WAITING FOR REPLY ACK)
+        - Use on ChatService
+    -------------------------------------------*/
 
     public void addPendingGroupInvite(String groupId, String peerId){
         this.pendingInviteGroupMember.computeIfAbsent(
@@ -131,6 +154,11 @@ public class Cache {
         return removed;
     }
 
+    /*------------------------------------------
+        PENDING MESSAGE LIST(WAIT FOR GET REPLY ACK)
+        - Use in ChatService
+    -------------------------------------------*/
+
     public List<Message> getPendingMessageList(){
         return new ArrayList<>(this.pendingMessage.values());
     }
@@ -142,5 +170,4 @@ public class Cache {
     public boolean removePendingMessage(String messageId){
         return (this.pendingMessage.remove(messageId) != null);
     }
-
 }

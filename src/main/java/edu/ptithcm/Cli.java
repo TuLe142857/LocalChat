@@ -74,8 +74,7 @@ public class Cli {
         IO.println();
 
         IO.println("Known Peer list: ");
-        for (var entry : Cache.getInstance().getPeerEntrySet()){
-            Peer peer = entry.getValue();
+        for (var peer : Cache.getInstance().getPeerList()){
             IO.println("Id: " + peer.getId());
             IO.println("PublicKey: " + CryptoUtils.publicKeyToString(peer.getPublicKey()));
             IO.println("Name: " + peer.getName());

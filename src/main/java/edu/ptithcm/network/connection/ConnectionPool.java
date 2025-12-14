@@ -1,10 +1,10 @@
-package edu.ptithcm.network.core;
+package edu.ptithcm.network.connection;
 
 
 import edu.ptithcm.cache.Cache;
 import edu.ptithcm.model.Peer;
-import edu.ptithcm.network.NetworkService;
 import edu.ptithcm.network.packet.NetworkPacket;
+import edu.ptithcm.network.service.HandshakeService;
 import org.tinylog.Logger;
 
 import javax.crypto.SecretKey;
@@ -101,7 +101,7 @@ public class ConnectionPool {
                     if (Thread.currentThread().isInterrupted())
                         throw new InterruptedException("Handshake cancelled");
                     // Gọi logic thực hiện handshake (được implement ở NetworkService hoặc tách ra class riêng)
-                    PeerConnection newConn = NetworkService.performOutgoingHandshake(targetPeer);
+                    PeerConnection newConn = HandshakeService.performOutgoingHandshake(targetPeer);
 
                     // Handshake thành công
                     pool.put(peerId, newConn);
