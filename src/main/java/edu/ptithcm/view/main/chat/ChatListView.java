@@ -61,9 +61,20 @@ public class ChatListView extends BaseView {
 
     @Override
     public void loadData() {
-        // Load initial conversations from cache
+        // Lấy Conversation đang được chọn để duy trì sau khi reload
+        Conversation selectedConv = conversationListView.getSelectionModel().getSelectedItem();
+
+        // Load conversations mới nhất từ cache (đã loại bỏ nhóm đã rời)
         conversations.setAll(Cache.getInstance().getConversationList());
         sortConversations();
+
+        // Cố gắng chọn lại Conversation cũ (nếu nó vẫn còn)
+        if (selectedConv != null) {
+            conversations.stream()
+                    .filter(c -> c.getId().equals(selectedConv.getId()))
+                    .findFirst()
+                    .ifPresent(c -> conversationListView.getSelectionModel().select(c));
+        }
     }
 
     @Override
@@ -86,15 +97,9 @@ public class ChatListView extends BaseView {
     }
 
     private void handleNewConversationEvent(NewConversationEvent event) {
-        Platform.runLater(() -> {
-            Conversation newConv = Cache.getInstance().getConversation(event.getConversationId());
-            if (newConv != null) {
-                if (!conversations.contains(newConv)) {
-                    conversations.add(newConv);
-                    sortConversations();
-                }
-            }
-        });
+        // SỬA CHỮA: Khi nhận sự kiện NewConversationEvent (kể cả khi event.getConversationId() == null,
+        // tức là rời nhóm), chúng ta phải TẢI LẠI TOÀN BỘ DANH SÁCH.
+        Platform.runLater(this::loadData);
     }
 
     /**
