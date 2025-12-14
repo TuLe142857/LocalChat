@@ -4,6 +4,7 @@ import edu.ptithcm.bus.MessageBus;
 import edu.ptithcm.bus.event.MessageReceivedEvent;
 import edu.ptithcm.bus.event.MessageSendFailedEvent;
 import edu.ptithcm.bus.event.MessageSendSuccessEvent;
+import edu.ptithcm.bus.event.NewConversationEvent; // ĐÃ THÊM IMPORT
 import edu.ptithcm.cache.Cache;
 import edu.ptithcm.model.Conversation;
 import edu.ptithcm.model.GroupConversation;
@@ -52,8 +53,6 @@ public class ChatBoxView extends BaseView {
         messages = FXCollections.observableArrayList();
         this.setVisible(false);
     }
-
-    @Override
     protected void setupUI() {
         BorderPane layout = new BorderPane();
 
@@ -167,9 +166,10 @@ public class ChatBoxView extends BaseView {
             this.currentConversation = null;
             this.setVisible(false);
 
-            // Cần cập nhật lại ChatListView (sẽ được thực hiện thông qua MessageBus/NewConversationEvent)
-            // Tuy nhiên, vì BaseView không có quyền gọi hàm ở MainLayout để switch view,
-            // việc chuyển view thường được xử lý ở tầng trên (MainLayout) hoặc thông qua event bus.
+            // ĐÃ SỬA: Gửi sự kiện NewConversationEvent để buộc ChatListView tải lại danh sách
+            // SỬ DỤNG PHƯƠNG THỨC "emit" CHÍNH XÁC
+            MessageBus.emit(new NewConversationEvent(null));
+
             // Tạm thời, ta chỉ ẩn chatbox đi.
         }
     }

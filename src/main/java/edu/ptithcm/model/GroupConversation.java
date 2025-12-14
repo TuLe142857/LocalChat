@@ -42,4 +42,9 @@ public class GroupConversation extends Conversation{
     public Peer getParticipant(String peerId){
         return participants.get(peerId);
     }
+
+    @Override
+    public String toString() {
+        return this.getName();
+    }
 }
