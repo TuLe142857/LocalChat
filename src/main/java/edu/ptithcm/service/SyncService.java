@@ -349,7 +349,9 @@ public class SyncService {
         }
         for(var message:response.getMessages()){
             // verify signature
-            Peer messageSender = Cache.getInstance().getPeer(message.getSenderId());
+            Peer messageSender = message.getSenderId().equals(Cache.getInstance().getCredential().getId())
+                   ? Cache.getInstance().getMyPeer()
+                    : Cache.getInstance().getPeer(message.getSenderId());
             if(messageSender == null){
                 Logger.warn("Sync message got null sender");
                 continue;
