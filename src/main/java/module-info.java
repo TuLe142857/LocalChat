@@ -7,10 +7,11 @@ module LocalChat {
     requires jdk.compiler;
     requires org.tinylog.api;
 
-//    requires org.
 
-//    requires com.google.gson;
+    // open data packet for gson
     opens edu.ptithcm.model to com.google.gson;
-    exports edu.ptithcm;
     opens edu.ptithcm.network.packet to com.google.gson;
+    opens edu.ptithcm.network.packet.payload to com.google.gson;
+
+    exports edu.ptithcm;
 }

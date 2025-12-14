@@ -52,22 +52,4 @@ public class Credential {
     public String getName() {
         return name;
     }
-
-    static void main(){
-        Credential credential = new Credential(CryptoUtils.generateRSAKeyPair(), "tú nè");
-        String json = JsonUtils.toJson(credential);
-        Credential credential1 = JsonUtils.fromJson(json, Credential.class);
-        IO.println(json);
-        IO.println(JsonUtils.toJson(credential1));
-
-        String plain = "hello";
-        String cipher = CryptoUtils.encryptRSA(plain, credential.getPublicKey());
-        String decrypt = CryptoUtils.decryptRSA(cipher, credential1.getPrivateKey());
-        IO.println(plain);
-        IO.println(cipher);
-        IO.println(decrypt);
-        CredentialManager.writeCredentialToFile(credential);
-        Credential credential2 = CredentialManager.readStoredCredential();
-        IO.println(CryptoUtils.decryptRSA(cipher, credential2.privateKey));
-    }
 }
