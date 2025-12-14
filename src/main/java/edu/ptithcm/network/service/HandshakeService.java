@@ -67,7 +67,7 @@ public class HandshakeService {
         try{
             while (running){
                 Socket client = serverSocket.accept();
-                handleIncomingHandshake(client);
+                HandshakeService.handleIncomingHandshake(client);
             }
         }catch (IOException e){
             if (running)
@@ -81,7 +81,7 @@ public class HandshakeService {
      *     Thực hiện gởi yêu cầu handshake
      *     Tạo session key, gởi gói handshake
      *     Nhận và check handshake ack, nếu verify ok và ack ==  accept thì trả về PeerConnection
-     *     Việc thêm vào connection pool phải do luồng gọi hàm này tự xủ lý
+     *     Việc thêm vào connection pool được ConnectionPool xử lý
      *
      * </pre>
      * @param targetPeer
@@ -89,74 +89,71 @@ public class HandshakeService {
      * @throws Exception Nếu không thành công, tự động đóng socket
      */
     public static PeerConnection performOutgoingHandshake(Peer targetPeer) throws Exception {
-        Logger.info("Start handshake with " + targetPeer.getIp());
+        Logger.debug("Make OutComingHandshake request to " + targetPeer.getIp());
 
-        // 1. Mở Socket (Blocking I/O nhưng chạy trên Virtual Thread nên OK)
+        // 1. Create socket
         Socket socket = new Socket(targetPeer.getIp(), targetPeer.getPort());
-        socket.setSoTimeout(5000); // Timeout 5s cho handshake
-
+        socket.setSoTimeout(5000);
         try {
-            // 2. Tạo Session Key (AES) cho phiên này
+            // 2. Generate SessionKey AES
             SecretKey sessionKey = CryptoUtils.generateAESKey();
             String sessionKeyStr = CryptoUtils.secretKeyToString(sessionKey);
 
-            // 3. Mã hóa Session Key bằng Public Key của đối phương (RSA)
+            // 3. Encrypt Session key by targetPeer PublicKey
             String encryptedSessionKey = CryptoUtils.encryptRSA(sessionKeyStr, targetPeer.getPublicKey());
 
-            // 4. Tạo Payload Handshake và Ký
+            // 4. Generate Payload + Sign
             HandshakePayload payload = new HandshakePayload(
                     Cache.getInstance().getCredential().getId(), // My ID
                     encryptedSessionKey
             );
             payload.sign(Cache.getInstance().getCredential().getPrivateKey());
 
-            // 5. Gửi gói tin HANDSHAKE
+            // 5. Send Handshake request
             NetworkPacket packet = new NetworkPacket(NetworkPacket.PacketType.HANDSHAKE, JsonUtils.toJson(payload));
 
-            // (Gửi raw vì chưa có PeerConnection wrapper)
             DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
             byte[] data = packet.toBytes();
             dos.writeInt(data.length);
             dos.write(data);
             dos.flush();
 
-            // 6. CHỜ PHẢN HỒI (ACK) - Rất quan trọng
+            // 6. Wait for HandShake ACK
             DataInputStream dis = new DataInputStream(socket.getInputStream());
             int len = dis.readInt();
             byte[] buf = new byte[len];
             dis.readFully(buf);
 
             NetworkPacket responsePacket = NetworkPacket.fromBytes(buf, 0, len);
+            if(responsePacket.getPacketType() != NetworkPacket.PacketType.HANDSHAKE_ACK){
+                Logger.warn("Invalid network packet type for handshake ack");
+                throw new Exception("Invalid network packet type for handshake ack");
+            }
 
-            if (responsePacket.getPacketType() == NetworkPacket.PacketType.HANDSHAKE_ACK) {
-                // Handshake thành công!
-                // Tắt timeout để dùng cho chat lâu dài
-                String encryptedPayload = responsePacket.getPayload();
-                String plainPayload = CryptoUtils.decryptAES(encryptedPayload, sessionKey);
-                HandshakeAckPayload handshakeAckPayload;
-                try{
-                    handshakeAckPayload = JsonUtils.fromJson(plainPayload, HandshakeAckPayload.class);
-                    if(handshakeAckPayload == null)
-                        throw new Exception("null handshake payload");
-                }catch (Exception e){
-                    throw e;
-                }
+            String encryptedPayload = responsePacket.getPayload();
+            String plainPayload = CryptoUtils.decryptAES(encryptedPayload, sessionKey);
+            HandshakeAckPayload handshakeAckPayload =JsonUtils.fromJson(plainPayload, HandshakeAckPayload.class);
+            if(handshakeAckPayload == null){
+                Logger.warn("Invalid Handshake Ack Payload : null payload");
+                throw new Exception("null handshake payload");
+            }
 
-                // verify package....
-                boolean check = handshakeAckPayload.getSenderId().equals(targetPeer.getId())
-                        && handshakeAckPayload.verify(targetPeer.getPublicKey())
-                        && (System.currentTimeMillis()-handshakeAckPayload.getTimestamp() < 5000);
-                if (! check)
-                    throw  new Exception("Verify handshake ack failed");
+            // verify package....
+            boolean check = handshakeAckPayload.getSenderId().equals(targetPeer.getId())
+                    && handshakeAckPayload.verify(targetPeer.getPublicKey())
+                    && (System.currentTimeMillis()-handshakeAckPayload.getTimestamp() < 5000);
+            if (! check){
+                Logger.warn("Handshake Ack verify failed");
+                throw  new Exception("Verify handshake ack failed");
+            }
 
-                if(handshakeAckPayload.isAccept()){
-                    return new PeerConnection(targetPeer, socket, sessionKey);
-                }else{
-                    throw new Exception("Handshake failed: get HandshakeAck.accept = false");
-                }
 
-            } else {
-                throw new Exception("Handshake failed: Invalid response type " + responsePacket.getPacketType());
+            if(handshakeAckPayload.isAccept()){
+                // infinite timeout
+                socket.setSoTimeout(0);
+                return new PeerConnection(targetPeer, socket, sessionKey);
+            }else{
+                throw new Exception("Handshake failed: get HandshakeAck.accept = false");
             }
 
         } catch (Exception e) {
@@ -173,44 +170,52 @@ public class HandshakeService {
      * Logic xử lý concurrency handshake được xử lý bên ConnectionPool, gọi hàm addIncomingConnection là được
      * @param client
      */
-    private void handleIncomingHandshake(Socket client){
+    private static void handleIncomingHandshake(Socket client){
         try{
+            // Read Payload
             DataInputStream dataInputStream = new DataInputStream(client.getInputStream());
             int length = dataInputStream.readInt();
             byte[] buf = new byte[length];
             dataInputStream.readFully(buf);
             NetworkPacket networkPacket = NetworkPacket.fromBytes(buf, 0, buf.length);
-
             if(networkPacket.getPacketType() != NetworkPacket.PacketType.HANDSHAKE){
+                Logger.warn("Reject Incoming Handshake: invalid network packet type");
                 client.close();
                 return;
             }
-
             HandshakePayload handshakePayload = networkPacket.getPayloadAs(HandshakePayload.class);
+
+            // Verify
             Peer senderPeer = Cache.getInstance().getPeer(handshakePayload.getSenderId());
             boolean check = (senderPeer != null)
                     && senderPeer.getId().equals(CryptoUtils.hashSHA256(CryptoUtils.publicKeyToString(senderPeer.getPublicKey())))
-                    && (System.currentTimeMillis() - handshakePayload.getTimestamp() < 5000)
+                    && (System.currentTimeMillis() - handshakePayload.getTimestamp() < 10000)
                     && (handshakePayload.verify(senderPeer.getPublicKey()));
             if (!check){
                 client.close();
+                Logger.warn("Reject Incoming Handshake: verify failed");
                 return;
             }
 
 
+            // Get Session AES key
             String encryptedSessionKeyStr = handshakePayload.getEncryptedSessionKey();
             String plainSessionKeyStr = CryptoUtils.decryptRSA(encryptedSessionKeyStr, Cache.getInstance().getCredential().getPrivateKey());
             if(plainSessionKeyStr == null){
                 client.close();
+                Logger.warn("Reject Incoming Handshake: no session key provided");
                 return;
             }
             SecretKey sessionKey = CryptoUtils.stringToSecretKey(plainSessionKeyStr);
 
-            // logic xử lý concurrency khi 2 peer cùng yêu cầu handshake cùng lúc sử lý ở ConnectionPool.addIncomingConnection
+
+            // Try to create Connection
             boolean addSuccess = ConnectionPool.getInstance().addIncomingConnection(senderPeer, client, sessionKey);
+
+
+            // Send reply
             HandshakeAckPayload handshakeAckPayload = new HandshakeAckPayload(Cache.getInstance().getCredential().getId(), addSuccess);
             handshakeAckPayload.sign(Cache.getInstance().getCredential().getPrivateKey());
-
             String encryptedPayload = CryptoUtils.encryptAES(JsonUtils.toJson(handshakeAckPayload), sessionKey);
             NetworkPacket ackPacket = new NetworkPacket(NetworkPacket.PacketType.HANDSHAKE_ACK, encryptedPayload);
 
@@ -220,8 +225,12 @@ public class HandshakeService {
             dataOutputStream.write(ackBuf);
             dataOutputStream.flush();
 
+
             if(!addSuccess){
                 client.close();
+                Logger.debug(String.format("Incoming Handshake from %s reject by ConnectionPool", client.getRemoteSocketAddress()));
+            }else{
+                Logger.debug(String.format("Incoming Handshake from %s accepted by ConnectionPool", client.getRemoteSocketAddress()));
             }
         } catch (Exception e) {
             try{client.close();}catch (Exception ee){}

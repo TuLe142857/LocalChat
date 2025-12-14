@@ -99,9 +99,16 @@ public class ConnectionPool {
                     PeerConnection newConn = HandshakeService.performOutgoingHandshake(targetPeer);
 
                     // Handshake thành công
-                    pool.put(peerId, newConn);
-                    future.complete(newConn);
-
+                    PeerConnection existing = pool.putIfAbsent(peerId, newConn);
+                    if (existing != null) {
+                        // Đã có kết nối khác (do addIncomingConnection thêm vào)
+                        // Đóng kết nối outgoing thừa này đi
+                        newConn.close();
+                        future.complete(existing);
+                    } else {
+                        // Chưa có, thêm thành công
+                        future.complete(newConn);
+                    }
                 } catch (Exception e) {
                     future.completeExceptionally(e);
                 } finally {
@@ -114,10 +121,15 @@ public class ConnectionPool {
         });
     }
 
+    /**
+     *
+     * @param peer
+     * @param socket
+     * @param sessionKey
+     * @return true if add success, else false
+     */
     public boolean addIncomingConnection(Peer peer, Socket socket, SecretKey sessionKey) {
         if (pool.containsKey(peer.getId())) {
-            // Đã có kết nối rồi -> từ chối kết nối mới này
-            // (Hoặc logic phức tạp hơn: so sánh ID để quyết định giữ cái nào)
             return false;
         }
 
