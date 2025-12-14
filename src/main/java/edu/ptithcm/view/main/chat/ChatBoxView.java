@@ -252,12 +252,31 @@ public class ChatBoxView extends BaseView {
         unsubscribeSuccess = MessageBus.subscribe(MessageSendSuccessEvent.class, this::handleMessageSuccess);
     }
 
-    // Logic này vẫn đảm bảo cập nhật tin nhắn đến (tự động)
     private void handleMessageReceived(MessageReceivedEvent event) {
+        // Đảm bảo cập nhật trên luồng JavaFX
         Platform.runLater(() -> {
-            if (activeConversation == null) return;
-            String senderId = event.getMessage().getSenderId();
-            if (activeConversation instanceof DirectConversation && activeConversation.getId().equals(senderId)) {
+            if (activeConversation == null) {
+                return;
+            }
+
+            String myId = Cache.getInstance().getCredential().getId();
+            Message receivedMessage = event.getMessage();
+
+            // 1. Xác định ID Conversation cục bộ (localConversationId) mà tin nhắn này thuộc về
+            //    Logic này phải KHỚP với logic trong ChatService.onReceiveMessage
+            String localConversationId;
+            if (receivedMessage.getConversationId().equals(myId)) {
+                // Đây là Direct Chat gửi đến mình.
+                // Trong Direct Chat, Conversation được lưu trong Cache bằng ID của người gửi (Partner ID).
+                localConversationId = receivedMessage.getSenderId();
+            } else {
+                // Đây là Group Chat (hoặc trường hợp không phải là Direct Chat gửi đến tôi).
+                // Conversation được lưu trong Cache bằng ID của nó.
+                localConversationId = receivedMessage.getConversationId();
+            }
+
+            // 2. Nếu Conversation đang mở trùng với Conversation vừa nhận tin nhắn, cập nhật UI.
+            if (activeConversation.getId().equals(localConversationId)) {
                 updateMessageArea();
             }
         });
