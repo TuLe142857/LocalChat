@@ -11,7 +11,10 @@ import javafx.scene.layout.VBox;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
 import javafx.scene.layout.Region;
-import edu.ptithcm.model.GroupConversation; // Cần import này
+import edu.ptithcm.model.GroupConversation;
+import javafx.scene.Node;
+import javafx.scene.control.Label;
+import javafx.scene.paint.Color;
 
 public class MessageItem extends ListCell<Message> {
 
@@ -29,58 +32,79 @@ public class MessageItem extends ListCell<Message> {
         String myId = Cache.getInstance().getCredential().getId();
         boolean isMine = message.getSenderId().equals(myId);
 
-        HBox messageWrapper = new HBox();
+        // Content VBox (Name + TextFlow + Status)
+        VBox contentBox = new VBox(2); // VBox wraps name and bubble
 
-        // SỬ DỤNG UIUtils.convertToEmojiTextFlow để xử lý emoji
-        // QUAN TRỌNG: TextFlow này hiện chỉ chứa nội dung tin nhắn và emoji
+        // 1. Sender Name Label (Outside the bubble, for group chat not mine)
+        boolean isGroupChat = Cache.getInstance().getConversation(message.getConversationId()) instanceof GroupConversation;
+        String senderName = Cache.getInstance().getPeer(message.getSenderId()) != null
+                ? Cache.getInstance().getPeer(message.getSenderId()).getName()
+                : "Unknown";
+
+        if (!isMine && isGroupChat) {
+            Label senderNameLabel = new Label(senderName);
+            senderNameLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #34495e; -fx-font-size: 0.85em; -fx-padding: 0 0 2 0;");
+            contentBox.getChildren().add(senderNameLabel);
+        }
+
+        // 2. Message Text Content (The Bubble)
         TextFlow messageTextFlow = UIUtils.convertToEmojiTextFlow(message.getContent());
-        messageTextFlow.setPadding(new Insets(5));
+        messageTextFlow.setPadding(new Insets(8, 12, 8, 12)); // Thêm padding cho bubble
 
-        String senderName = isMine ? "You" : (Cache.getInstance().getPeer(message.getSenderId()) != null ? Cache.getInstance().getPeer(message.getSenderId()).getName() : "Unknown");
+        // 3. Status Icon (Chỉ hiện cho tin nhắn đi)
+        Node statusIcon = UIUtils.getMessageStatusIcon(message.getStatus());
+        HBox statusBox = new HBox(statusIcon);
+        statusBox.setAlignment(Pos.BOTTOM_RIGHT);
+        statusBox.setPadding(new Insets(0, 0, 0, 5));
 
-        VBox messageContent = new VBox();
-        messageContent.setSpacing(2);
+        // Horizontal wrapper for bubble and status
+        HBox bubbleAndStatus = new HBox(5);
+        bubbleAndStatus.getChildren().add(messageTextFlow);
+
+        if (isMine) {
+            // Tin nhắn của tôi (phải)
+            messageTextFlow.setStyle("-fx-background-color: #3498db; -fx-background-radius: 15 15 0 15;");
+            contentBox.setAlignment(Pos.CENTER_RIGHT);
+            bubbleAndStatus.setAlignment(Pos.BOTTOM_RIGHT);
+
+            // Đặt text thành màu trắng
+            for(Node node : messageTextFlow.getChildren()) {
+                if (node instanceof Text) {
+                    ((Text) node).setFill(Color.WHITE);
+                }
+            }
+
+            bubbleAndStatus.getChildren().add(statusBox);
+
+        } else {
+            // Tin nhắn của người khác (trái)
+            messageTextFlow.setStyle("-fx-background-color: #ecf0f1; -fx-background-radius: 15 15 15 0;");
+            contentBox.setAlignment(Pos.CENTER_LEFT);
+            bubbleAndStatus.setAlignment(Pos.BOTTOM_LEFT);
+
+            // Đặt text thành màu đen (mặc định)
+            for(Node node : messageTextFlow.getChildren()) {
+                if (node instanceof Text) {
+                    ((Text) node).setFill(Color.BLACK);
+                }
+            }
+        }
+
+        contentBox.getChildren().add(bubbleAndStatus);
+
+        // 4. Main wrapper
+        HBox messageWrapper = new HBox(contentBox);
+        messageWrapper.setPadding(new Insets(2, 5, 2, 5));
+        messageWrapper.setMaxWidth(Double.MAX_VALUE);
+        messageWrapper.setAlignment(isMine ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
 
         // ĐẶT GIỚI HẠN CHIỀU RỘNG TỐI ĐA
         if (getListView() != null) {
-            double maxWidth = getListView().getWidth() * 0.8;
+            double maxWidth = getListView().getWidth() * 0.65; // 65% width
             messageTextFlow.setMaxWidth(maxWidth);
-        } else {
-            messageTextFlow.setMaxWidth(Region.USE_PREF_SIZE);
+            contentBox.setMaxWidth(maxWidth);
         }
 
-        if (isMine) {
-            messageWrapper.setAlignment(Pos.CENTER_RIGHT);
-            messageTextFlow.setStyle("-fx-background-color: #DCF8C6; -fx-background-radius: 10;");
-        } else {
-            messageWrapper.setAlignment(Pos.CENTER_LEFT);
-            messageTextFlow.setStyle("-fx-background-color: #E8E8E8; -fx-background-radius: 10;");
-        }
-
-        // 1. Sender Name (Chỉ hiện cho group chat và không phải tin của mình)
-        if (!isMine && Cache.getInstance().getConversation(message.getConversationId()) instanceof GroupConversation) {
-            Text name = new Text(senderName + "\n");
-            name.setStyle("-fx-font-weight: bold; -fx-fill: #3b5998; -fx-font-size: 0.8em;"); // Blue color for name
-
-            // THÊM TÊN NGƯỜI GỬI VÀO ĐẦU TextFlow
-            messageTextFlow.getChildren().add(0, name);
-        }
-
-        // 2. Status Icon (Chỉ hiện cho tin nhắn đi)
-        if (isMine) {
-            HBox statusBox = new HBox();
-            statusBox.setPadding(new Insets(0, 0, 0, 5));
-            statusBox.setAlignment(Pos.BOTTOM_RIGHT);
-            statusBox.getChildren().add(UIUtils.getMessageStatusIcon(message.getStatus()));
-
-            messageWrapper.getChildren().add(messageTextFlow);
-            messageWrapper.getChildren().add(statusBox);
-        } else {
-            messageWrapper.getChildren().add(messageTextFlow);
-        }
-
-        messageWrapper.setPadding(new Insets(2, 5, 2, 5));
-        messageWrapper.setMaxWidth(Double.MAX_VALUE);
         setGraphic(messageWrapper);
     }
 }

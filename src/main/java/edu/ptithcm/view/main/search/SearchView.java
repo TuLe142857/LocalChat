@@ -13,6 +13,8 @@ import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.control.Alert.AlertType;
 
 import java.util.ArrayList;
@@ -26,7 +28,7 @@ public class SearchView extends BaseView {
     private ObservableList<Peer> peers;
     private Button startChatButton;
     private Button createGroupButton;
-    private Button addMemberButton; // ĐÃ THÊM
+    private Button addMemberButton;
 
     @Override
     protected void init() {
@@ -36,32 +38,42 @@ public class SearchView extends BaseView {
     @Override
     protected void setupUI() {
         BorderPane layout = new BorderPane();
-        layout.setPadding(new Insets(10));
+        layout.setPadding(new Insets(20));
+        layout.setStyle("-fx-background-color: #ffffff;"); // White background
 
-        Label title = new Label("Search Peer & Conversation Management");
-        title.setStyle("-fx-font-size: 1.5em; -fx-font-weight: bold; -fx-padding: 0 0 10 0;");
+        Label title = new Label("Find Peers & Manage Groups");
+        title.setStyle("-fx-font-size: 1.8em; -fx-font-weight: bold; -fx-text-fill: #2c3e50; -fx-padding: 0 0 15 0;");
 
         // Center: Peer List
         peerListView = new ListView<>(peers);
         peerListView.setCellFactory(param -> new PeerListItem());
-        peerListView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE); // Cho phép chọn nhiều để tạo nhóm
+        peerListView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+        peerListView.setStyle("-fx-border-color: #dcdde1; -fx-border-radius: 5;");
+        VBox.setVgrow(peerListView, Priority.ALWAYS);
 
         // Bottom: Action Buttons
-        startChatButton = new Button("Start Direct Chat (Chọn 1 Peer)");
+        startChatButton = new Button("Start Direct Chat");
         startChatButton.setMaxWidth(Double.MAX_VALUE);
+        startChatButton.setStyle("-fx-background-color: #2ecc71; -fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 5; -fx-padding: 10;");
         startChatButton.setOnAction(e -> startDirectChat());
 
-        createGroupButton = new Button("Create Group Chat (Chọn 1+ Peers)");
+        createGroupButton = new Button("Create Group Chat");
         createGroupButton.setMaxWidth(Double.MAX_VALUE);
+        createGroupButton.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 5; -fx-padding: 10;");
         createGroupButton.setOnAction(e -> showGroupCreationDialog());
 
-        addMemberButton = new Button("Add Member to Existing Group"); // ĐÃ THÊM NÚT
+        addMemberButton = new Button("Add Member to Existing Group");
         addMemberButton.setMaxWidth(Double.MAX_VALUE);
+        addMemberButton.setStyle("-fx-background-color: #f39c12; -fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 5; -fx-padding: 10;");
         addMemberButton.setOnAction(e -> showAddMemberDialog());
 
+        // Use HBox to make buttons side-by-side if needed, but VBox is also clean
+        HBox topButtonBox = new HBox(10, startChatButton, createGroupButton);
+        HBox.setHgrow(startChatButton, Priority.ALWAYS);
+        HBox.setHgrow(createGroupButton, Priority.ALWAYS);
 
-        VBox buttonBox = new VBox(10, startChatButton, createGroupButton, addMemberButton); // THÊM NÚT MỚI
-        buttonBox.setPadding(new Insets(10, 0, 0, 0));
+        VBox buttonBox = new VBox(10, topButtonBox, addMemberButton);
+        buttonBox.setPadding(new Insets(15, 0, 0, 0));
 
         // Layout assembly
         layout.setTop(title);

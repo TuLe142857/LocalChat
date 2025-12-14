@@ -24,15 +24,14 @@ public class MainLayout extends BaseView {
     @Override
     protected void setupUI() {
         rootLayout = new BorderPane();
+        rootLayout.setStyle("-fx-background-color: #f5f5f5;"); // Thêm màu nền nhẹ cho layout chính
 
         // Tạo Sidebar và truyền callback xử lý khi user click menu
         SidebarView sidebar = new SidebarView(this::switchContent);
 
-        // Bọc sidebar để cố định chiều rộng (optional, nhưng giúp layout ổn định)
-        VBox sidebarWrapper = new VBox(sidebar);
-        sidebarWrapper.setStyle("-fx-pref-width: 200;");
-
-        rootLayout.setLeft(sidebarWrapper);
+        // ĐÃ SỬA: Loại bỏ VBox wrapper và đặt SidebarView trực tiếp vào BorderPane.setLeft.
+        // SidebarView (VBox) đã được cấu hình chiều rộng cố định (200) và màu nền tối bên trong nó.
+        rootLayout.setLeft(sidebar);
 
         // Mặc định hiện Chat
         switchContent("CHAT");

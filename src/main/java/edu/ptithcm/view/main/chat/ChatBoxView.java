@@ -4,7 +4,7 @@ import edu.ptithcm.bus.MessageBus;
 import edu.ptithcm.bus.event.MessageReceivedEvent;
 import edu.ptithcm.bus.event.MessageSendFailedEvent;
 import edu.ptithcm.bus.event.MessageSendSuccessEvent;
-import edu.ptithcm.bus.event.NewConversationEvent; // ĐÃ THÊM IMPORT
+import edu.ptithcm.bus.event.NewConversationEvent;
 import edu.ptithcm.cache.Cache;
 import edu.ptithcm.model.Conversation;
 import edu.ptithcm.model.GroupConversation;
@@ -41,7 +41,7 @@ public class ChatBoxView extends BaseView {
     private TextField inputField;
     private Button sendButton;
     private Button viewMembersButton;
-    private Button leaveGroupButton; // ĐÃ THÊM
+    private Button leaveGroupButton;
 
     private Runnable unsubscribeReceived;
     private Runnable unsubscribeSendSuccess;
@@ -56,27 +56,37 @@ public class ChatBoxView extends BaseView {
     protected void setupUI() {
         BorderPane layout = new BorderPane();
 
+        // Background for the entire chat area
+        layout.setStyle("-fx-background-color: #ffffff;");
+
         // Top Header Area
         conversationNameLabel = new Label("Select a chat");
-        conversationNameLabel.setStyle("-fx-font-size: 1.2em; -fx-font-weight: bold;");
+        // Modern Title Style
+        conversationNameLabel.setStyle("-fx-font-size: 1.4em; -fx-font-weight: bold; -fx-text-fill: #2c3e50;");
 
         viewMembersButton = new Button("View Members");
         viewMembersButton.setOnAction(e -> viewGroupMembers());
+        viewMembersButton.setStyle("-fx-background-color: #f0f4f9; -fx-text-fill: #34495e; -fx-background-radius: 5;");
 
-        leaveGroupButton = new Button("Leave Group"); // ĐÃ THÊM NÚT RỜI NHÓM
+        leaveGroupButton = new Button("Leave Group");
         leaveGroupButton.setOnAction(e -> leaveCurrentGroup());
+        leaveGroupButton.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 5;");
+
 
         // VBox để căn phải cho các nút (cần đẩy Label sang trái)
-        HBox buttonBox = new HBox(5, viewMembersButton, leaveGroupButton);
+        HBox buttonBox = new HBox(10, viewMembersButton, leaveGroupButton); // Tăng spacing
         buttonBox.setAlignment(Pos.CENTER_RIGHT);
 
         HBox headerBox = new HBox(10, conversationNameLabel, buttonBox);
-        headerBox.setPadding(new Insets(10));
+        headerBox.setPadding(new Insets(15, 20, 15, 20)); // Tăng padding
         headerBox.setAlignment(Pos.CENTER_LEFT);
-        HBox.setHgrow(conversationNameLabel, Priority.ALWAYS); // Đẩy nút ViewMembers sang phải
-        HBox.setHgrow(buttonBox, Priority.NEVER); // Giữ nút cố định
+        HBox.setHgrow(conversationNameLabel, Priority.ALWAYS);
+        HBox.setHgrow(buttonBox, Priority.NEVER);
 
-        // Ẩn/hiện nút
+        // Thêm border dưới nhẹ cho header
+        headerBox.setStyle("-fx-border-color: #ecf0f1; -fx-border-width: 0 0 1 0; -fx-background-color: #ffffff;");
+
+        // Ẩn/hiện nút (Keep original logic)
         viewMembersButton.setManaged(false);
         leaveGroupButton.setManaged(false);
 
@@ -84,26 +94,35 @@ public class ChatBoxView extends BaseView {
         messageListView = new ListView<>(messages);
         messageListView.setCellFactory(param -> new MessageItem());
         VBox.setVgrow(messageListView, Priority.ALWAYS);
-        messageListView.setStyle("-fx-background-color: #f5f5f5;");
+        // Remove background color on list view to show layout's background
+        messageListView.setStyle("-fx-background-color: transparent; -fx-border-color: transparent;");
 
         // Bottom: Thanh nhập liệu
         inputField = new TextField();
         inputField.setPromptText("Type message...");
         inputField.setOnAction(e -> sendMessage());
         HBox.setHgrow(inputField, Priority.ALWAYS);
+        inputField.setStyle("-fx-background-radius: 20; -fx-border-radius: 20; -fx-padding: 10 15; -fx-border-color: #dcdde1; -fx-border-width: 1;");
 
-        sendButton = new Button("Send");
+        sendButton = new Button("\u27A4"); // Unicode for Send/Arrow
         sendButton.setOnAction(e -> sendMessage());
+        // Modern, circular send button
+        sendButton.setStyle("-fx-background-color: #2ecc71; -fx-text-fill: white; -fx-font-size: 1.2em; -fx-background-radius: 20; -fx-min-width: 40px; -fx-max-width: 40px; -fx-min-height: 40px; -fx-max-height: 40px; -fx-padding: 0;");
+
 
         HBox inputBar = new HBox(10, inputField, sendButton);
-        inputBar.setPadding(new Insets(10));
+        inputBar.setPadding(new Insets(10, 20, 10, 20)); // Tăng padding
         inputBar.setAlignment(Pos.CENTER);
+        // Thêm border trên cho input bar
+        inputBar.setStyle("-fx-border-color: #ecf0f1; -fx-border-width: 1 0 0 0; -fx-background-color: #ffffff;");
 
+        // Combine everything
         VBox centerContent = new VBox(headerBox, messageListView, inputBar);
         VBox.setVgrow(messageListView, Priority.ALWAYS);
 
         layout.setCenter(centerContent);
 
+        // Initial state (Keep original logic)
         inputField.setDisable(true);
         sendButton.setDisable(true);
 
