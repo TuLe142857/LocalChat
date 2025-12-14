@@ -1,8 +1,9 @@
 package edu.ptithcm.view.main.search;
 
 import edu.ptithcm.cache.Cache;
-import edu.ptithcm.model.Conversation; // ĐÃ THÊM IMPORT NÀY
+import edu.ptithcm.model.Conversation;
 import edu.ptithcm.model.DirectConversation;
+import edu.ptithcm.model.GroupConversation;
 import edu.ptithcm.model.Peer;
 import edu.ptithcm.service.ChatService;
 import edu.ptithcm.view.base.BaseView;
@@ -17,6 +18,7 @@ import javafx.scene.control.Alert.AlertType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class SearchView extends BaseView {
 
@@ -24,6 +26,7 @@ public class SearchView extends BaseView {
     private ObservableList<Peer> peers;
     private Button startChatButton;
     private Button createGroupButton;
+    private Button addMemberButton; // ĐÃ THÊM
 
     @Override
     protected void init() {
@@ -48,11 +51,16 @@ public class SearchView extends BaseView {
         startChatButton.setMaxWidth(Double.MAX_VALUE);
         startChatButton.setOnAction(e -> startDirectChat());
 
-        createGroupButton = new Button("Create Group Chat (Chọn 2+ Peers)");
+        createGroupButton = new Button("Create Group Chat (Chọn 1+ Peers)");
         createGroupButton.setMaxWidth(Double.MAX_VALUE);
         createGroupButton.setOnAction(e -> showGroupCreationDialog());
 
-        VBox buttonBox = new VBox(10, startChatButton, createGroupButton);
+        addMemberButton = new Button("Add Member to Existing Group"); // ĐÃ THÊM NÚT
+        addMemberButton.setMaxWidth(Double.MAX_VALUE);
+        addMemberButton.setOnAction(e -> showAddMemberDialog());
+
+
+        VBox buttonBox = new VBox(10, startChatButton, createGroupButton, addMemberButton); // THÊM NÚT MỚI
         buttonBox.setPadding(new Insets(10, 0, 0, 0));
 
         // Layout assembly
@@ -73,10 +81,11 @@ public class SearchView extends BaseView {
 
     @Override
     public void setupEventBus() {
-        // Logic refresh Peer List (Cần subscribe MessageBus cho event Peer Discovered/Updated nếu có)
+        // Logic refresh Peer List
     }
 
     private void startDirectChat() {
+        // ... (Logic giữ nguyên)
         ObservableList<Peer> selectedPeers = peerListView.getSelectionModel().getSelectedItems();
 
         if (selectedPeers.size() != 1) {
@@ -88,7 +97,6 @@ public class SearchView extends BaseView {
         Conversation existingConv = Cache.getInstance().getConversation(targetPeer.getId());
 
         if (existingConv == null) {
-            // Tạo cuộc trò chuyện trực tiếp mới và thêm vào cache
             DirectConversation newConv = new DirectConversation(targetPeer);
             Cache.getInstance().addConversation(newConv);
             new Alert(AlertType.INFORMATION, "Đã tạo Direct Chat với " + targetPeer.getName() + ".").showAndWait();
@@ -98,6 +106,7 @@ public class SearchView extends BaseView {
     }
 
     private void showGroupCreationDialog() {
+        // ... (Logic giữ nguyên)
         ObservableList<Peer> selectedPeers = peerListView.getSelectionModel().getSelectedItems();
 
         if (selectedPeers.size() < 1) {
@@ -119,13 +128,69 @@ public class SearchView extends BaseView {
                     invitedPeerIds.add(p.getId());
                 }
 
-                // Tạo nhóm và gửi lời mời
                 ChatService.createGroupConversation(trimmedName, invitedPeerIds);
                 new Alert(AlertType.INFORMATION, "Nhóm '" + trimmedName + "' đã được tạo và lời mời đã được gửi đi!").showAndWait();
 
             } else {
                 new Alert(AlertType.ERROR, "Tên nhóm không được để trống.").showAndWait();
             }
+        });
+    }
+
+    private void showAddMemberDialog() {
+        ObservableList<Peer> selectedPeers = peerListView.getSelectionModel().getSelectedItems();
+
+        if (selectedPeers.isEmpty()) {
+            new Alert(AlertType.WARNING, "Vui lòng chọn ít nhất một peer để thêm vào nhóm.").showAndWait();
+            return;
+        }
+
+        // 1. Lấy danh sách các Group mà tôi là thành viên để thêm người
+        List<GroupConversation> myGroups = Cache.getInstance().getConversationList().stream()
+                .filter(c -> c instanceof GroupConversation)
+                .map(c -> (GroupConversation)c)
+                .collect(Collectors.toList());
+
+        if (myGroups.isEmpty()) {
+            new Alert(AlertType.ERROR, "Bạn không có nhóm nào để thêm thành viên.").showAndWait();
+            return;
+        }
+
+        // 2. Tạo Dialog để chọn nhóm
+        ChoiceDialog<GroupConversation> dialog = new ChoiceDialog<>(myGroups.get(0), myGroups);
+        dialog.setTitle("Add Members");
+        dialog.setHeaderText("Chọn nhóm để thêm thành viên");
+        dialog.setContentText("Chọn Nhóm:");
+
+        Optional<GroupConversation> result = dialog.showAndWait();
+
+        result.ifPresent(selectedGroup -> {
+            List<String> invitedIds = new ArrayList<>();
+            String peersAdded = "";
+
+            for (Peer p : selectedPeers) {
+                // Kiểm tra nếu Peer đã là thành viên của nhóm, không gửi lời mời
+                if (selectedGroup.getParticipant(p.getId()) == null) {
+                    invitedIds.add(p.getId());
+                    peersAdded += p.getName() + ", ";
+                }
+            }
+
+            if (invitedIds.isEmpty()) {
+                new Alert(AlertType.INFORMATION, "Tất cả các peer đã chọn đã là thành viên của nhóm này.").showAndWait();
+                return;
+            }
+
+            // 3. Gửi lời mời cho từng Peer
+            for (String peerId : invitedIds) {
+                ChatService.invitePeerToGroup(selectedGroup.getId(), peerId);
+            }
+
+            new Alert(AlertType.INFORMATION,
+                    String.format("Đã gửi lời mời tới %d thành viên mới (%s) cho nhóm '%s'.",
+                            invitedIds.size(),
+                            peersAdded.substring(0, peersAdded.length() - 2),
+                            selectedGroup.getName())).showAndWait();
         });
     }
 

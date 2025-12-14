@@ -15,7 +15,10 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.TextField;
@@ -25,6 +28,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import org.tinylog.Logger;
 
+import java.util.Optional;
 import java.util.function.Consumer;
 
 public class ChatBoxView extends BaseView {
@@ -35,7 +39,8 @@ public class ChatBoxView extends BaseView {
     private ObservableList<Message> messages;
     private TextField inputField;
     private Button sendButton;
-    private Button viewMembersButton; // ĐÃ THÊM
+    private Button viewMembersButton;
+    private Button leaveGroupButton; // ĐÃ THÊM
 
     private Runnable unsubscribeReceived;
     private Runnable unsubscribeSendSuccess;
@@ -56,14 +61,25 @@ public class ChatBoxView extends BaseView {
         conversationNameLabel = new Label("Select a chat");
         conversationNameLabel.setStyle("-fx-font-size: 1.2em; -fx-font-weight: bold;");
 
-        viewMembersButton = new Button("View Members"); // ĐÃ THÊM NÚT
+        viewMembersButton = new Button("View Members");
         viewMembersButton.setOnAction(e -> viewGroupMembers());
-        viewMembersButton.setManaged(false); // Ẩn/hiện bằng setManaged/setVisible
 
-        HBox headerBox = new HBox(10, conversationNameLabel, viewMembersButton);
+        leaveGroupButton = new Button("Leave Group"); // ĐÃ THÊM NÚT RỜI NHÓM
+        leaveGroupButton.setOnAction(e -> leaveCurrentGroup());
+
+        // VBox để căn phải cho các nút (cần đẩy Label sang trái)
+        HBox buttonBox = new HBox(5, viewMembersButton, leaveGroupButton);
+        buttonBox.setAlignment(Pos.CENTER_RIGHT);
+
+        HBox headerBox = new HBox(10, conversationNameLabel, buttonBox);
         headerBox.setPadding(new Insets(10));
         headerBox.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(conversationNameLabel, Priority.ALWAYS); // Đẩy nút ViewMembers sang phải
+        HBox.setHgrow(buttonBox, Priority.NEVER); // Giữ nút cố định
+
+        // Ẩn/hiện nút
+        viewMembersButton.setManaged(false);
+        leaveGroupButton.setManaged(false);
 
         // Center: Hiển thị tin nhắn
         messageListView = new ListView<>(messages);
@@ -84,7 +100,7 @@ public class ChatBoxView extends BaseView {
         inputBar.setPadding(new Insets(10));
         inputBar.setAlignment(Pos.CENTER);
 
-        VBox centerContent = new VBox(headerBox, messageListView, inputBar); // DÙNG headerBox MỚI
+        VBox centerContent = new VBox(headerBox, messageListView, inputBar);
         VBox.setVgrow(messageListView, Priority.ALWAYS);
 
         layout.setCenter(centerContent);
@@ -102,10 +118,12 @@ public class ChatBoxView extends BaseView {
             // 1. Cập nhật UI
             conversationNameLabel.setText(conversation.getName());
 
-            // 2. Ẩn/hiện nút View Members
+            // 2. Ẩn/hiện nút View Members & Leave Group
             boolean isGroup = conversation instanceof GroupConversation;
             viewMembersButton.setVisible(isGroup);
             viewMembersButton.setManaged(isGroup);
+            leaveGroupButton.setVisible(isGroup); // Áp dụng cho nút Leave
+            leaveGroupButton.setManaged(isGroup);
 
             // 3. Load tin nhắn
             messages.setAll(conversation.getMessageList());
@@ -128,6 +146,35 @@ public class ChatBoxView extends BaseView {
             memberView.show();
         }
     }
+
+    private void leaveCurrentGroup() {
+        if (!(currentConversation instanceof GroupConversation)) {
+            return;
+        }
+
+        Alert alert = new Alert(
+                AlertType.CONFIRMATION,
+                "Are you sure you want to leave the group '" + currentConversation.getName() + "'?",
+                ButtonType.YES, ButtonType.NO
+        );
+        alert.setTitle("Confirm Leave Group");
+        Optional<ButtonType> result = alert.showAndWait();
+
+        if (result.isPresent() && result.get() == ButtonType.YES) {
+            ChatService.leaveGroup(currentConversation.getId());
+
+            // Sau khi rời nhóm, chúng ta cần chuyển sang trạng thái không chọn cuộc trò chuyện nào
+            this.currentConversation = null;
+            this.setVisible(false);
+
+            // Cần cập nhật lại ChatListView (sẽ được thực hiện thông qua MessageBus/NewConversationEvent)
+            // Tuy nhiên, vì BaseView không có quyền gọi hàm ở MainLayout để switch view,
+            // việc chuyển view thường được xử lý ở tầng trên (MainLayout) hoặc thông qua event bus.
+            // Tạm thời, ta chỉ ẩn chatbox đi.
+        }
+    }
+
+    // ... (Các phương thức khác giữ nguyên)
 
     private void sendMessage() {
         String content = inputField.getText().trim();
