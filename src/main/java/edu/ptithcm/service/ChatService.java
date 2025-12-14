@@ -16,40 +16,27 @@ import org.tinylog.Logger;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
 
 public class ChatService {
-    // Key: groupId, value: list of peer id
-
-    public static void init(){
-//        MessageBus.subscribe(
-//                MessageSendingEvent.class,
-//                messageSendingEvent -> {
-//                    ChatService.sendMessage(messageSendingEvent.getMessage());
-//                }
-//        );
-//
-//        MessageBus.subscribe(
-//                MessageReceivedEvent.class,
-//                messageReceivedEvent -> {
-//                    ChatService.onReceiveMessage(messageReceivedEvent.getMessage());
-//                }
-//        );
-//
-//        MessageBus.subscribe(
-//                MessageSendSuccessEvent.class,
-//                messageSendSuccessEvent -> {
-//                    ChatService.onSendSuccessMessage(messageSendSuccessEvent.getMessageId(), messageSendSuccessEvent.getConversationId());
-//                }
-//        );
-
-        MessageBus.subscribe(
-                MessageSendFailedEvent.class,
-                messageSendFailedEvent -> {
-                    ChatService.onSendFailedMessage(messageSendFailedEvent.getMessageId(), messageSendFailedEvent.getConversationId());
+    private static final long PENDING_MESSAGE_TIMEOUT_MS = 10000;
+    private static final ScheduledExecutorService scheduledExecutorService;
+    static {
+        Logger.debug("Start ChatService scheduled checking pending message");
+        scheduledExecutorService = Executors.newScheduledThreadPool(
+                1,
+                r -> {
+                    Thread t = new Thread(r);
+                    t.setDaemon(true);
+                    return t;
                 }
         );
+
+        //start scheduler
+        // check every 5 seconds
+        scheduledExecutorService.scheduleWithFixedDelay(ChatService::runCheckPendingMessageTimeout, 0, 5, TimeUnit.SECONDS);
+    }
+    public static void init(){
 
     }
 
@@ -64,6 +51,8 @@ public class ChatService {
         Conversation conversation = Cache.getInstance().getConversation(message.getConversationId());
         if(conversation == null)
             return;
+
+        Cache.getInstance().addPendingMessage(message);
         if (conversation instanceof DirectConversation){
             DirectConversation dConversation = (DirectConversation)(conversation);
             Peer targetPeer = dConversation.getPartner();
@@ -73,12 +62,12 @@ public class ChatService {
                         try{
                             peerConnection.sendNetworkPacket(networkPacket);
                         }catch (Exception e){
-                            MessageBus.emit(new MessageSendFailedEvent(message.getId(), message.getConversationId()));
+                            ChatService.onSendFailedMessage(message.getId(), message.getConversationId());
                         }
                     })
                     .exceptionally(
                             t ->{
-                                MessageBus.emit(new MessageSendFailedEvent(message.getId(), message.getConversationId()));
+                                ChatService.onSendFailedMessage(message.getId(), message.getConversationId());
                                 return  null;
                             }
                     );
@@ -97,13 +86,13 @@ public class ChatService {
                                         peerConnection.sendNetworkPacket(networkPacket);
 //                                        allSendFailed = false;
                                     }catch (Exception e){
-//                                        MessageBus.emit(new MessageSendFailedEvent(message.getId(), message.getConversationId()));
+//                                        ChatService.onSendFailedMessage(message.getId(), message.getConversationId());
                                     }
                                 }
                         )
                         .exceptionally(
                                 t->{
-//                                    MessageBus.emit(new MessageSendFailedEvent(message.getId(), message.getConversationId()));
+//                                    ChatService.onSendFailedMessage(message.getId(), message.getConversationId());
                                     return  null;
                                 }
                         );
@@ -392,10 +381,11 @@ public class ChatService {
                 .ifPresent(
                         message -> {message.setStatus(Message.MessageStatus.SUCCESS);}
                 );
+        Cache.getInstance().removePendingMessage(messageId);
         MessageBus.emit(new MessageSendSuccessEvent(messageId, conversationId));
     }
 
-    private static void onSendFailedMessage(String messageId, String conversationId){
+    public static void onSendFailedMessage(String messageId, String conversationId){
         Conversation conversation = Cache.getInstance().getConversation(conversationId);
         if(conversation == null)
             return;
@@ -406,7 +396,20 @@ public class ChatService {
                 .ifPresent(
                         message -> {message.setStatus(Message.MessageStatus.FAILED);}
                 );
+        Cache.getInstance().removePendingMessage(messageId);
         MessageBus.emit(new MessageSendFailedEvent(messageId, conversationId));
+    }
+
+    /**
+     *
+     */
+    private static void runCheckPendingMessageTimeout(){
+        for(Message message:Cache.getInstance().getPendingMessageList()){
+            if ((System.currentTimeMillis() - message.getTimestamp()) > PENDING_MESSAGE_TIMEOUT_MS){
+                Logger.debug("Find 1 pending message timeout (mess.id = "+ message.getId() + " conversation.id = " + message.getConversationId());
+                ChatService.onSendFailedMessage(message.getId(), message.getConversationId());
+            }
+        }
     }
 
 }

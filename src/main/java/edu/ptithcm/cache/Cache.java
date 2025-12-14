@@ -23,11 +23,13 @@ public class Cache {
     private final ConcurrentHashMap<String, Peer> knownPeers;
     private final ConcurrentHashMap<String, Conversation> conversations;
     private final ConcurrentHashMap<String, Set<String>> pendingInviteGroupMember;
+    private final ConcurrentHashMap<String, Message> pendingMessage;
 
     private Cache(){
         knownPeers = new ConcurrentHashMap<>();
         conversations = new ConcurrentHashMap<>();
         pendingInviteGroupMember = new ConcurrentHashMap<>();
+        pendingMessage = new ConcurrentHashMap<>();
     }
 
     public static Cache getInstance(){
@@ -42,6 +44,7 @@ public class Cache {
         knownPeers.clear();
         conversations.clear();
         pendingInviteGroupMember.clear();
+        pendingMessage.clear();
     }
 
     public Peer getMyPeer(){
@@ -126,6 +129,18 @@ public class Cache {
             pendingInviteGroupMember.remove(groupId, set);
         }
         return removed;
+    }
+
+    public List<Message> getPendingMessageList(){
+        return new ArrayList<>(this.pendingMessage.values());
+    }
+
+    public void addPendingMessage(Message message){
+        this.pendingMessage.putIfAbsent(message.getId(), message);
+    }
+
+    public boolean removePendingMessage(String messageId){
+        return (this.pendingMessage.remove(messageId) != null);
     }
 
 }
